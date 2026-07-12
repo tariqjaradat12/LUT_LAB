@@ -140,15 +140,20 @@ class VideoTranscoder(private val context: Context) {
 
         // 3. Setup video encoder
         val mime = MediaFormat.MIMETYPE_VIDEO_AVC
+        // Gallery apps are much less tolerant than MediaCodec.  Keep the output
+        // constrained to the baseline AVC feature set (8-bit 4:2:0, no B-frames)
+        // instead of leaving profile/rate-control entirely up to the device codec.
+        // This is deliberately a portable delivery encode, not an editing master.
+        val sourceFrameRate = sourceFormat.getInteger(MediaFormat.KEY_FRAME_RATE, 30)
+            .coerceIn(24, 60)
         val encoderFormat = MediaFormat.createVideoFormat(mime, finalExportWidth, finalExportHeight).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            setInteger(MediaFormat.KEY_BIT_RATE, 25_000_000) // High-quality 25 Mbps target
-            setInteger(MediaFormat.KEY_FRAME_RATE, sourceFormat.getInteger(MediaFormat.KEY_FRAME_RATE, 30))
+            setInteger(MediaFormat.KEY_BIT_RATE, 18_000_000) // High-quality, gallery-friendly bitrate
+            setInteger(MediaFormat.KEY_FRAME_RATE, sourceFrameRate)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-            
-            // High quality constant quality mode configuration if supported
-            setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CQ)
-            setInteger(MediaFormat.KEY_QUALITY, 95)
+            setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+            setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
+            setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel41)
         }
 
         val encoder = MediaCodec.createEncoderByType(mime)
@@ -317,7 +322,16 @@ class VideoTranscoder(private val context: Context) {
         }
         var audioFormat: MediaFormat? = null
         if (audioTrackIndex >= 0) {
-            audioFormat = videoExtractor.getTrackFormat(audioTrackIndex)
+            val candidateFormat = videoExtractor.getTrackFormat(audioTrackIndex)
+            val candidateMime = candidateFormat.getString(MediaFormat.KEY_MIME)
+            // Do not put an arbitrary source audio stream (for example Opus) in
+            // an MP4.  Native gallery apps commonly flag that whole file as bad.
+            if (candidateMime == MediaFormat.MIMETYPE_AUDIO_AAC) {
+                audioFormat = candidateFormat
+            } else {
+                Log.w(TAG, "Skipping unsupported MP4 audio track: $candidateMime")
+                audioTrackIndex = -1
+            }
         }
 
         // 7. Transcode loop
