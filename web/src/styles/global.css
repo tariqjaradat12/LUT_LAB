@@ -301,3 +301,13 @@ button {
 
 .file-btn { display: inline-block; }
 .file-btn input { display: none; }
+
+.curve-canvas {
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  touch-action: none;
+  cursor: crosshair;
+}

@@ -6,8 +6,9 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { DEFAULT_EDIT_PARAMS, type EditParams, type FilmSubTab, type ToolSection } from '../engine/types';
+import { type EditParams, type FilmSubTab, type ToolSection } from '../engine/types';
 import { loadImageFromFile } from '../lib/imageIO';
+import { cloneDefaultParams } from '../lib/params';
 
 type Store = {
   params: EditParams;
@@ -31,7 +32,7 @@ type Store = {
 const EditCtx = createContext<Store | null>(null);
 
 export function EditProvider({ children }: { children: ReactNode }) {
-  const [params, setParams] = useState<EditParams>(DEFAULT_EDIT_PARAMS);
+  const [params, setParams] = useState<EditParams>(() => cloneDefaultParams());
   const [imageBitmap, setImageBitmap] = useState<ImageBitmap | null>(null);
   const [blendBitmap, setBlendBitmap] = useState<ImageBitmap | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +47,18 @@ export function EditProvider({ children }: { children: ReactNode }) {
     setParams((p) => ({ ...p, ...partial }));
   }, []);
 
-  const resetParams = useCallback(() => setParams(DEFAULT_EDIT_PARAMS), []);
+  const clearBlend = useCallback(() => {
+    setBlendBitmap((prev) => {
+      prev?.close();
+      return null;
+    });
+    setParams((p) => ({ ...p, doubleExposureEnabled: false }));
+  }, []);
+
+  const resetParams = useCallback(() => {
+    setParams(cloneDefaultParams());
+    clearBlend();
+  }, [clearBlend]);
 
   const openImage = useCallback(async (file: File) => {
     try {
@@ -73,13 +85,6 @@ export function EditProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open blend photo.');
     }
-  }, []);
-
-  const clearBlend = useCallback(() => {
-    setBlendBitmap((prev) => {
-      prev?.close();
-      return null;
-    });
   }, []);
 
   const value = useMemo(

@@ -10,8 +10,7 @@ export function TopBar({ onExport }: Props) {
   return (
     <header className="topbar">
       <div className="brand">
-        Nocturne
-        <span>Local photo grading</span>
+        Lut Lab
       </div>
       <div className="top-actions">
         <label className="btn file-btn">

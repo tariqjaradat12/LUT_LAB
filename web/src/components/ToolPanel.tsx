@@ -1,5 +1,7 @@
-import { BLEND_MODES, type HueBand, type ToolSection } from '../engine/types';
+import { useState } from 'react';
+import { BLEND_MODES, HUE_BANDS, type FilmSubTab, type HueBand, type ToolSection } from '../engine/types';
 import { useEditStore } from '../state/editStore';
+import { CurveEditor } from './CurveEditor';
 import { Slider, Toggle } from './Slider';
 
 const SECTIONS: { id: ToolSection; label: string }[] = [
@@ -7,25 +9,30 @@ const SECTIONS: { id: ToolSection; label: string }[] = [
   { id: 'color', label: 'Color' },
   { id: 'curves', label: 'Curves' },
   { id: 'hsl', label: 'HSL' },
-  { id: 'perspective', label: 'Perspective' },
   { id: 'detail', label: 'Detail' },
   { id: 'film', label: 'Lens & Film' },
   { id: 'masks', label: 'Masks' },
   { id: 'double', label: 'Double exposure' },
 ];
 
-const HUE_BANDS: HueBand[] = [
-  'red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'magenta',
-];
-
 const pct = (v: number) => `${Math.round(v)}`;
 const ev = (v: number) => `${v.toFixed(2)} EV`;
+const fStop = (v: number) => `f/${v.toFixed(1)}`;
+
+const FILM_TABS: { id: FilmSubTab; label: string }[] = [
+  { id: 'vignette', label: 'Vignette' },
+  { id: 'grain', label: 'Grain' },
+  { id: 'halation', label: 'Halation' },
+  { id: 'bokeh', label: 'Bokeh' },
+  { id: 'anamorphic', label: 'Anamorphic streaks' },
+];
 
 export function ToolPanel() {
   const {
     params, setParam, patchParams, section, setSection, filmSub, setFilmSub,
     openBlendImage, clearBlend, blendBitmap,
   } = useEditStore();
+  const [hslBand, setHslBand] = useState<HueBand>('red');
 
   return (
     <aside className="panel">
@@ -64,53 +71,50 @@ export function ToolPanel() {
         )}
 
         {section === 'curves' && (
-          <>
-            <p className="hint">RGB tone curve anchors (shadow → highlight).</p>
-            {([0, 1, 2, 3, 4] as const).map((i) => (
-              <Slider
-                key={i}
-                label={['Blacks', 'Shadows', 'Midtones', 'Highlights', 'Whites'][i]}
-                value={params.curves.rgb[i].y}
-                min={0}
-                max={1}
-                step={0.01}
-                onChange={(v) => {
-                  const rgb = params.curves.rgb.map((p, idx) => (idx === i ? { ...p, y: v } : p));
-                  setParam('curves', { ...params.curves, rgb });
-                }}
-                format={(v) => v.toFixed(2)}
-              />
-            ))}
-          </>
+          <CurveEditor
+            curves={params.curves}
+            onChange={(ch, points) => setParam('curves', { ...params.curves, [ch]: points })}
+          />
         )}
 
         {section === 'hsl' && (
           <>
-            <p className="hint">Per-band saturation (full HSL wheels can deepen later).</p>
-            {HUE_BANDS.map((band) => (
-              <Slider
-                key={band}
-                label={`${band[0].toUpperCase()}${band.slice(1)} saturation`}
-                value={params.hsl[band].saturation}
-                min={-100}
-                max={100}
-                onChange={(v) =>
-                  setParam('hsl', {
-                    ...params.hsl,
-                    [band]: { ...params.hsl[band], saturation: v },
-                  })
-                }
-                format={pct}
-              />
-            ))}
-          </>
-        )}
-
-        {section === 'perspective' && (
-          <>
-            <Slider label="Vertical" value={params.perspectiveVertical} min={-100} max={100} onChange={(v) => setParam('perspectiveVertical', v)} format={pct} />
-            <Slider label="Horizontal" value={params.perspectiveHorizontal} min={-100} max={100} onChange={(v) => setParam('perspectiveHorizontal', v)} format={pct} />
-            <Slider label="Rotate" value={params.perspectiveRotate} min={-100} max={100} onChange={(v) => setParam('perspectiveRotate', v)} format={pct} />
+            <div className="chip-row">
+              {HUE_BANDS.map((band) => (
+                <button
+                  key={band}
+                  type="button"
+                  className={`chip${hslBand === band ? ' active' : ''}`}
+                  onClick={() => setHslBand(band)}
+                >
+                  {band[0].toUpperCase() + band.slice(1)}
+                </button>
+              ))}
+            </div>
+            <Slider
+              label="Hue"
+              value={params.hsl[hslBand].hue}
+              min={-100}
+              max={100}
+              onChange={(v) => setParam('hsl', { ...params.hsl, [hslBand]: { ...params.hsl[hslBand], hue: v } })}
+              format={pct}
+            />
+            <Slider
+              label="Saturation"
+              value={params.hsl[hslBand].saturation}
+              min={-100}
+              max={100}
+              onChange={(v) => setParam('hsl', { ...params.hsl, [hslBand]: { ...params.hsl[hslBand], saturation: v } })}
+              format={pct}
+            />
+            <Slider
+              label="Luminance"
+              value={params.hsl[hslBand].luminance}
+              min={-100}
+              max={100}
+              onChange={(v) => setParam('hsl', { ...params.hsl, [hslBand]: { ...params.hsl[hslBand], luminance: v } })}
+              format={pct}
+            />
           </>
         )}
 
@@ -118,20 +122,18 @@ export function ToolPanel() {
           <>
             <Slider label="Sharpen" value={params.sharpen} min={0} max={100} onChange={(v) => setParam('sharpen', v)} format={pct} />
             <Slider label="Definition" value={params.definition} min={-100} max={100} onChange={(v) => setParam('definition', v)} format={pct} />
+            <Slider label="Softness" value={params.softness} min={0} max={100} onChange={(v) => setParam('softness', v)} format={pct} />
+            <Slider label="Noise reduction" value={params.denoiseLuminance} min={0} max={100} onChange={(v) => setParam('denoiseLuminance', v)} format={pct} />
+            <Slider label="Color noise reduction" value={params.denoiseColor} min={0} max={100} onChange={(v) => setParam('denoiseColor', v)} format={pct} />
           </>
         )}
 
         {section === 'film' && (
           <>
             <div className="subtabs">
-              {(['vignette', 'grain', 'halation', 'bokeh'] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  className={`subtab${filmSub === t ? ' active' : ''}`}
-                  onClick={() => setFilmSub(t)}
-                >
-                  {t[0].toUpperCase() + t.slice(1)}
+              {FILM_TABS.map((t) => (
+                <button key={t.id} type="button" className={`subtab${filmSub === t.id ? ' active' : ''}`} onClick={() => setFilmSub(t.id)}>
+                  {t.label}
                 </button>
               ))}
             </div>
@@ -145,46 +147,33 @@ export function ToolPanel() {
             {filmSub === 'grain' && (
               <>
                 <Slider label="Amount" value={params.grainAmount} min={0} max={100} onChange={(v) => setParam('grainAmount', v)} format={pct} />
-                <Slider label="Size" value={params.grainSize} min={1} max={10} step={0.5} onChange={(v) => setParam('grainSize', v)} />
+                <Slider label="Size" value={params.grainSize} min={0.5} max={8} step={0.1} onChange={(v) => setParam('grainSize', v)} format={(v) => v.toFixed(1)} />
+                <Slider label="Roughness" value={params.grainRoughness} min={0} max={1} step={0.01} onChange={(v) => setParam('grainRoughness', v)} format={(v) => v.toFixed(2)} />
               </>
             )}
             {filmSub === 'halation' && (
               <>
-                <p className="hint">Glow follows the plus on the image — drag it to aim the effect.</p>
+                <p className="hint">Drag the plus on the image to aim the glow.</p>
                 <Slider label="Strength" value={params.halationStrength} min={0} max={100} onChange={(v) => setParam('halationStrength', v)} format={pct} />
                 <Slider label="Radius" value={params.halationRadius} min={0.05} max={0.8} step={0.01} onChange={(v) => setParam('halationRadius', v)} format={(v) => v.toFixed(2)} />
                 <div className="row">
                   <span>Color</span>
-                  <input
-                    type="color"
-                    value={params.halationColor}
-                    onChange={(e) => setParam('halationColor', e.target.value)}
-                  />
+                  <input type="color" value={params.halationColor} onChange={(e) => setParam('halationColor', e.target.value)} />
                 </div>
-                <Slider
-                  label="Center X"
-                  value={params.halationCenter.x}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  onChange={(v) => patchParams({ halationCenter: { ...params.halationCenter, x: v } })}
-                  format={(v) => v.toFixed(2)}
-                />
-                <Slider
-                  label="Center Y"
-                  value={params.halationCenter.y}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  onChange={(v) => patchParams({ halationCenter: { ...params.halationCenter, y: v } })}
-                  format={(v) => v.toFixed(2)}
-                />
               </>
             )}
             {filmSub === 'bokeh' && (
               <>
+                <p className="hint">Drag the plus to set what stays sharp. Lower f-numbers blur more.</p>
                 <Slider label="Strength" value={params.bokehStrength} min={0} max={100} onChange={(v) => setParam('bokehStrength', v)} format={pct} />
-                <Slider label="Focus radius" value={params.bokehRadius} min={0.1} max={1} step={0.01} onChange={(v) => setParam('bokehRadius', v)} format={(v) => v.toFixed(2)} />
+                <Slider label="Aperture" value={params.bokehAperture} min={1.4} max={22} step={0.1} onChange={(v) => setParam('bokehAperture', v)} format={fStop} />
+              </>
+            )}
+            {filmSub === 'anamorphic' && (
+              <>
+                <p className="hint">Drag the plus to center the streaks.</p>
+                <Slider label="Amount" value={params.longExposureAmount} min={0} max={100} onChange={(v) => setParam('longExposureAmount', v)} format={pct} />
+                <Slider label="Direction" value={params.longExposureDirection} min={-180} max={180} onChange={(v) => setParam('longExposureDirection', v)} />
               </>
             )}
           </>
@@ -192,9 +181,9 @@ export function ToolPanel() {
 
         {section === 'masks' && (
           <>
+            <p className="hint">Turn on a mask, then drag the plus icons on the image.</p>
             <Toggle label="Linear mask" value={params.linearMaskEnabled} onChange={(v) => setParam('linearMaskEnabled', v)} />
-            <Slider label="Linear start" value={params.linearMaskStartY} min={0} max={1} step={0.01} onChange={(v) => setParam('linearMaskStartY', v)} format={(v) => v.toFixed(2)} />
-            <Slider label="Linear end" value={params.linearMaskEndY} min={0} max={1} step={0.01} onChange={(v) => setParam('linearMaskEndY', v)} format={(v) => v.toFixed(2)} />
+            <Slider label="Linear feather" value={params.linearMaskFeather} min={0.02} max={0.5} step={0.01} onChange={(v) => setParam('linearMaskFeather', v)} format={(v) => v.toFixed(2)} />
             <Toggle label="Circular mask" value={params.circularMaskEnabled} onChange={(v) => setParam('circularMaskEnabled', v)} />
             <Slider label="Circle radius" value={params.circularMaskRadius} min={0.05} max={1} step={0.01} onChange={(v) => setParam('circularMaskRadius', v)} format={(v) => v.toFixed(2)} />
             <Slider label="Mask exposure" value={params.maskExposure} min={-100} max={100} onChange={(v) => setParam('maskExposure', v)} format={pct} />
@@ -204,11 +193,7 @@ export function ToolPanel() {
 
         {section === 'double' && (
           <>
-            <Toggle
-              label="Enable"
-              value={params.doubleExposureEnabled}
-              onChange={(v) => setParam('doubleExposureEnabled', v)}
-            />
+            <Toggle label="Enable" value={params.doubleExposureEnabled} onChange={(v) => setParam('doubleExposureEnabled', v)} />
             <label className="btn file-btn" style={{ marginBottom: '0.75rem' }}>
               {blendBitmap ? 'Change blend photo' : 'Select blend photo'}
               <input
@@ -226,7 +211,6 @@ export function ToolPanel() {
                 Clear blend photo
               </button>
             )}
-            <p className="hint">Fujifilm-style blend modes for layering a second still.</p>
             <div className="chip-row">
               {BLEND_MODES.map((m) => (
                 <button

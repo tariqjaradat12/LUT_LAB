@@ -42,10 +42,15 @@ export type HueBand =
   | 'purple'
   | 'magenta';
 
+export const HUE_BANDS: HueBand[] = [
+  'red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'magenta',
+];
+
 export type HSLBand = { hue: number; saturation: number; luminance: number };
 export type HSLAdjustments = Record<HueBand, HSLBand>;
 export type CurvePoint = { x: number; y: number };
-export type CurveChannels = { rgb: CurvePoint[]; r: CurvePoint[]; g: CurvePoint[]; b: CurvePoint[] };
+export type CurveChannelId = 'rgb' | 'r' | 'g' | 'b';
+export type CurveChannels = Record<CurveChannelId, CurvePoint[]>;
 
 export interface EditParams {
   exposure: number;
@@ -61,26 +66,33 @@ export interface EditParams {
   bwEnabled: boolean;
   curves: CurveChannels;
   hsl: HSLAdjustments;
-  perspectiveVertical: number;
-  perspectiveHorizontal: number;
-  perspectiveRotate: number;
   sharpen: number;
   definition: number;
+  softness: number;
+  denoiseLuminance: number;
+  denoiseColor: number;
   vignetteStrength: number;
   vignetteRadius: number;
   vignetteSoftness: number;
   grainAmount: number;
   grainSize: number;
+  grainRoughness: number;
   halationStrength: number;
   halationRadius: number;
   halationColor: string;
   halationCenter: Point2D;
   bokehStrength: number;
-  bokehRadius: number;
+  bokehAperture: number;
+  bokehCenter: Point2D;
+  longExposureAmount: number;
+  longExposureDirection: number;
+  longExposureCenter: Point2D;
   linearMaskEnabled: boolean;
-  linearMaskStartY: number;
-  linearMaskEndY: number;
+  linearMaskStart: Point2D;
+  linearMaskEnd: Point2D;
+  linearMaskFeather: number;
   circularMaskEnabled: boolean;
+  circularMaskCenter: Point2D;
   circularMaskRadius: number;
   maskExposure: number;
   maskSaturation: number;
@@ -90,7 +102,7 @@ export interface EditParams {
   doubleExposureBlend: DoubleExposureBlend;
 }
 
-const defaultCurve = (): CurvePoint[] => [
+export const defaultCurve = (): CurvePoint[] => [
   { x: 0, y: 0 },
   { x: 0.25, y: 0.25 },
   { x: 0.5, y: 0.5 },
@@ -128,26 +140,33 @@ export const DEFAULT_EDIT_PARAMS: EditParams = {
     purple: defaultHslBand(),
     magenta: defaultHslBand(),
   },
-  perspectiveVertical: 0,
-  perspectiveHorizontal: 0,
-  perspectiveRotate: 0,
   sharpen: 0,
   definition: 0,
+  softness: 0,
+  denoiseLuminance: 0,
+  denoiseColor: 0,
   vignetteStrength: 0,
   vignetteRadius: 0.7,
   vignetteSoftness: 0.5,
   grainAmount: 0,
-  grainSize: 2,
+  grainSize: 2.5,
+  grainRoughness: 0.45,
   halationStrength: 0,
   halationRadius: 0.3,
   halationColor: '#FF4422',
   halationCenter: { x: 0.5, y: 0.35 },
   bokehStrength: 0,
-  bokehRadius: 0.45,
+  bokehAperture: 5.6,
+  bokehCenter: { x: 0.5, y: 0.5 },
+  longExposureAmount: 0,
+  longExposureDirection: 0,
+  longExposureCenter: { x: 0.5, y: 0.5 },
   linearMaskEnabled: false,
-  linearMaskStartY: 0.15,
-  linearMaskEndY: 0.55,
+  linearMaskStart: { x: 0.35, y: 0.5 },
+  linearMaskEnd: { x: 0.65, y: 0.5 },
+  linearMaskFeather: 0.12,
   circularMaskEnabled: false,
+  circularMaskCenter: { x: 0.5, y: 0.5 },
   circularMaskRadius: 0.4,
   maskExposure: 0,
   maskSaturation: 0,
@@ -162,10 +181,9 @@ export type ToolSection =
   | 'color'
   | 'curves'
   | 'hsl'
-  | 'perspective'
   | 'detail'
   | 'film'
   | 'masks'
   | 'double';
 
-export type FilmSubTab = 'vignette' | 'grain' | 'halation' | 'bokeh';
+export type FilmSubTab = 'vignette' | 'grain' | 'halation' | 'bokeh' | 'anamorphic';

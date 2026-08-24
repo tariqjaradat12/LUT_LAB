@@ -1,4 +1,4 @@
-import { BLEND_MODE_INDEX, type EditParams } from './types';
+import { BLEND_MODE_INDEX, HUE_BANDS, type EditParams } from './types';
 import { FRAG, VERT } from './shaderSource';
 import { hexToRgb } from '../lib/imageIO';
 
@@ -12,6 +12,16 @@ function compile(gl: WebGLRenderingContext, type: number, src: string) {
     throw new Error(err || 'Shader compile failed');
   }
   return s;
+}
+
+function curveYs(points: { y: number }[]) {
+  return new Float32Array([
+    points[0]?.y ?? 0,
+    points[1]?.y ?? 0.25,
+    points[2]?.y ?? 0.5,
+    points[3]?.y ?? 0.75,
+    points[4]?.y ?? 1,
+  ]);
 }
 
 export class GradeRenderer {
@@ -53,14 +63,15 @@ export class GradeRenderer {
       'uImage', 'uBlend', 'uHasBlend', 'uResolution',
       'uExposure', 'uBrightness', 'uContrast', 'uHighlights', 'uShadows',
       'uSaturation', 'uVibrance', 'uTemperature', 'uTint', 'uHue', 'uBw',
-      'uCurveY0', 'uCurveY1', 'uCurveY2', 'uCurveY3', 'uCurveY4',
-      'uPerspV', 'uPerspH', 'uPerspRot',
-      'uSharpen', 'uDefinition',
+      'uCurveW', 'uCurveR', 'uCurveG', 'uCurveB',
+      'uHslH', 'uHslS', 'uHslL',
+      'uSharpen', 'uDefinition', 'uSoftness', 'uDenoiseL', 'uDenoiseC',
       'uVigStrength', 'uVigRadius', 'uVigSoft',
-      'uGrainAmount', 'uGrainSize',
+      'uGrainAmount', 'uGrainSize', 'uGrainRough',
       'uHalStrength', 'uHalRadius', 'uHalColor', 'uHalCenter',
-      'uBokehStrength', 'uBokehRadius',
-      'uLinMask', 'uLinStart', 'uLinEnd', 'uCircMask', 'uCircRadius',
+      'uBokehStrength', 'uBokehAperture', 'uBokehCenter',
+      'uLongAmt', 'uLongDir', 'uLongCenter',
+      'uLinMask', 'uLinStart', 'uLinEnd', 'uLinFeather', 'uCircMask', 'uCircCenter', 'uCircRadius',
       'uMaskExposure', 'uMaskSat',
       'uDxEnabled', 'uDxOpacity', 'uDxOffset', 'uDxBlend',
     ];
@@ -80,8 +91,7 @@ export class GradeRenderer {
   }
 
   setImage(bitmap: ImageBitmap) {
-    const gl = this.gl;
-    if (!this.tex) this.tex = gl.createTexture();
+    if (!this.tex) this.tex = this.gl.createTexture();
     this.upload(this.tex!, bitmap);
     this.imageSize = { w: bitmap.width, h: bitmap.height };
     this.resize();
@@ -89,13 +99,12 @@ export class GradeRenderer {
   }
 
   setBlendImage(bitmap: ImageBitmap | null) {
-    const gl = this.gl;
     if (!bitmap) {
       this.hasBlend = false;
       this.render();
       return;
     }
-    if (!this.blendTex) this.blendTex = gl.createTexture();
+    if (!this.blendTex) this.blendTex = this.gl.createTexture();
     this.upload(this.blendTex!, bitmap);
     this.hasBlend = true;
     this.render();
@@ -133,33 +142,49 @@ export class GradeRenderer {
     gl.uniform1f(L.uTint, p.tint);
     gl.uniform1f(L.uHue, p.hue);
     gl.uniform1i(L.uBw, p.bwEnabled ? 1 : 0);
-    const c = p.curves.rgb;
-    gl.uniform1f(L.uCurveY0, c[0]?.y ?? 0);
-    gl.uniform1f(L.uCurveY1, c[1]?.y ?? 0.25);
-    gl.uniform1f(L.uCurveY2, c[2]?.y ?? 0.5);
-    gl.uniform1f(L.uCurveY3, c[3]?.y ?? 0.75);
-    gl.uniform1f(L.uCurveY4, c[4]?.y ?? 1);
-    gl.uniform1f(L.uPerspV, p.perspectiveVertical);
-    gl.uniform1f(L.uPerspH, p.perspectiveHorizontal);
-    gl.uniform1f(L.uPerspRot, p.perspectiveRotate);
+    gl.uniform1fv(L.uCurveW, curveYs(p.curves.rgb));
+    gl.uniform1fv(L.uCurveR, curveYs(p.curves.r));
+    gl.uniform1fv(L.uCurveG, curveYs(p.curves.g));
+    gl.uniform1fv(L.uCurveB, curveYs(p.curves.b));
+    const hArr = new Float32Array(8);
+    const sArr = new Float32Array(8);
+    const lArr = new Float32Array(8);
+    HUE_BANDS.forEach((band, i) => {
+      hArr[i] = p.hsl[band].hue;
+      sArr[i] = p.hsl[band].saturation;
+      lArr[i] = p.hsl[band].luminance;
+    });
+    gl.uniform1fv(L.uHslH, hArr);
+    gl.uniform1fv(L.uHslS, sArr);
+    gl.uniform1fv(L.uHslL, lArr);
     gl.uniform1f(L.uSharpen, p.sharpen);
     gl.uniform1f(L.uDefinition, p.definition);
+    gl.uniform1f(L.uSoftness, p.softness);
+    gl.uniform1f(L.uDenoiseL, p.denoiseLuminance);
+    gl.uniform1f(L.uDenoiseC, p.denoiseColor);
     gl.uniform1f(L.uVigStrength, p.vignetteStrength);
     gl.uniform1f(L.uVigRadius, p.vignetteRadius);
     gl.uniform1f(L.uVigSoft, p.vignetteSoftness);
     gl.uniform1f(L.uGrainAmount, p.grainAmount);
     gl.uniform1f(L.uGrainSize, p.grainSize);
+    gl.uniform1f(L.uGrainRough, p.grainRoughness);
     gl.uniform1f(L.uHalStrength, p.halationStrength);
     gl.uniform1f(L.uHalRadius, p.halationRadius);
     const [hr, hg, hb] = hexToRgb(p.halationColor);
     gl.uniform3f(L.uHalColor, hr, hg, hb);
     gl.uniform2f(L.uHalCenter, p.halationCenter.x, p.halationCenter.y);
     gl.uniform1f(L.uBokehStrength, p.bokehStrength);
-    gl.uniform1f(L.uBokehRadius, p.bokehRadius);
+    gl.uniform1f(L.uBokehAperture, p.bokehAperture);
+    gl.uniform2f(L.uBokehCenter, p.bokehCenter.x, p.bokehCenter.y);
+    gl.uniform1f(L.uLongAmt, p.longExposureAmount);
+    gl.uniform1f(L.uLongDir, p.longExposureDirection);
+    gl.uniform2f(L.uLongCenter, p.longExposureCenter.x, p.longExposureCenter.y);
     gl.uniform1i(L.uLinMask, p.linearMaskEnabled ? 1 : 0);
-    gl.uniform1f(L.uLinStart, p.linearMaskStartY);
-    gl.uniform1f(L.uLinEnd, p.linearMaskEndY);
+    gl.uniform2f(L.uLinStart, p.linearMaskStart.x, p.linearMaskStart.y);
+    gl.uniform2f(L.uLinEnd, p.linearMaskEnd.x, p.linearMaskEnd.y);
+    gl.uniform1f(L.uLinFeather, p.linearMaskFeather);
     gl.uniform1i(L.uCircMask, p.circularMaskEnabled ? 1 : 0);
+    gl.uniform2f(L.uCircCenter, p.circularMaskCenter.x, p.circularMaskCenter.y);
     gl.uniform1f(L.uCircRadius, p.circularMaskRadius);
     gl.uniform1f(L.uMaskExposure, p.maskExposure);
     gl.uniform1f(L.uMaskSat, p.maskSaturation);
@@ -191,9 +216,6 @@ export class GradeRenderer {
     const off = document.createElement('canvas');
     off.width = w;
     off.height = h;
-    const gl = off.getContext('webgl', { preserveDrawingBuffer: true, alpha: false });
-    if (!gl) throw new Error('WebGL export failed.');
-    // Reuse main canvas draw into 2d for simplicity & correctness
     const prevW = this.canvas.width;
     const prevH = this.canvas.height;
     this.canvas.width = w;
