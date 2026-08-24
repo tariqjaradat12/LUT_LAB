@@ -181,9 +181,14 @@ export function resampleLut33(lut: { size: number; table: [number, number, numbe
 }
 
 export function lutDataToTextureBytes(data: Float32Array): Uint8Array {
-  const out = new Uint8Array(data.length);
-  for (let i = 0; i < data.length; i++) {
-    out[i] = Math.round(Math.min(1, Math.max(0, data[i])) * 255);
+  const pixels = data.length / 3;
+  const out = new Uint8Array(pixels * 4);
+  let src = 0;
+  for (let i = 0; i < pixels; i++) {
+    out[i * 4] = Math.round(Math.min(1, Math.max(0, data[src++])) * 255);
+    out[i * 4 + 1] = Math.round(Math.min(1, Math.max(0, data[src++])) * 255);
+    out[i * 4 + 2] = Math.round(Math.min(1, Math.max(0, data[src++])) * 255);
+    out[i * 4 + 3] = 255;
   }
   return out;
 }

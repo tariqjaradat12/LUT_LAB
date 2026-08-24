@@ -120,22 +120,6 @@ vec3 sampleLut(vec3 c) {
   return mix(c0, c1, db);
 }
 
-vec3 applyLutGrade(vec3 src) {
-  vec3 target = sampleLut(clamp(src, 0.0, 1.0));
-  if (abs(uLutToneOffset) > 0.01) {
-    float factor = pow(2.0, (uLutToneOffset / 100.0) * 1.5);
-    target *= factor;
-  }
-  if (abs(uLutColorOffset) > 0.01) {
-    float shift = (uLutColorOffset / 100.0) * 0.25;
-    target.r = clamp(target.r + shift, 0.0, 1.0);
-    target.g = clamp(target.g - shift * 0.5, 0.0, 1.0);
-    target.b = clamp(target.b - shift, 0.0, 1.0);
-  }
-  float t = uLutIntensity / 100.0;
-  return mix(src, clamp(target, 0.0, 1.0), t);
-}
-
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
@@ -181,6 +165,20 @@ vec3 hsv2rgb(vec3 c) {
   if (i == 3.0) return vec3(p, q, v);
   if (i == 4.0) return vec3(t, p, v);
   return vec3(v, p, q);
+}
+
+vec3 applyLutGrade(vec3 src) {
+  vec3 target = sampleLut(clamp(src, 0.0, 1.0));
+  vec3 hsv = rgb2hsv(clamp(target, 0.0, 1.0));
+  if (abs(uLutToneOffset) > 0.01) {
+    hsv.z = clamp(hsv.z * pow(2.0, (uLutToneOffset / 100.0) * 0.85), 0.0, 1.0);
+  }
+  if (abs(uLutColorOffset) > 0.01) {
+    hsv.x = fract(hsv.x + (uLutColorOffset / 100.0) * 0.14);
+  }
+  target = hsv2rgb(hsv);
+  float t = uLutIntensity / 100.0;
+  return mix(src, clamp(target, 0.0, 1.0), t);
 }
 
 float evalCurve(float x, float y0, float y1, float y2, float y3, float y4) {
