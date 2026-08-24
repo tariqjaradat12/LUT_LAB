@@ -4,15 +4,16 @@ Browser photo editor — grade locally, nothing uploads to a server.
 
 ## Live site
 
-After GitHub Pages is enabled, the app is at:
+**https://tariqjaradat12.github.io/LUT_LAB/**
 
-**https://zebrastripes125.github.io/LUT_LAB/**
+## Enable hosting (one-time, ~30 seconds)
 
-## Enable hosting (one-time)
+1. Open **[Settings → Pages](https://github.com/tariqjaradat12/LUT_LAB/settings/pages)**
+2. Under **Build and deployment → Source**, choose **Deploy from a branch**
+3. **Branch:** `gh-pages` · **Folder:** `/ (root)` · click **Save**
+4. Wait 1–2 minutes, then open the link above
 
-1. Open [github.com/zebrastripes125/LUT_LAB/settings/pages](https://github.com/zebrastripes125/LUT_LAB/settings/pages)
-2. Under **Build and deployment**, set **Source** to **GitHub Actions**
-3. Push to `main` — the **Deploy Lut Lab** workflow publishes the site
+The **Deploy Lut Lab** workflow builds the site and pushes it to the `gh-pages` branch automatically.
 
 ## Develop locally
 
@@ -26,4 +27,4 @@ Open http://localhost:5173
 
 ## Custom domain (optional)
 
-In repo **Settings → Pages**, add a domain like `lutlab.app` and point DNS to GitHub Pages.
+In **Settings → Pages**, add a domain (e.g. `lutlab.app`) and point DNS to GitHub Pages.
