@@ -1,60 +1,34 @@
-# LUT LAB
+# Lut Lab
 
-LUT LAB is a React Native Android/iOS app for media grading, LUT editing, exporting, and sharing free presets through an in-app Community Gallery.
+**Live app:** [https://tariqjaradat12.github.io/LUT_LAB/](https://tariqjaradat12.github.io/LUT_LAB/)
 
-## What Is Included
+Lut Lab is a local-first photo editor that runs in your browser. Open a photo, grade it, and export — nothing uploads to a server.
 
-- Home media picker and preview
-- Studio controls for light, color, curves, HSL, geometry, detail, effects, overlays, and LUTs
-- Share Current LUT flow that publishes the active grade to the Community Gallery
-- Local persistence for app settings, imported LUTs, liked posts, shared community posts, and editor session recovery
-- Android native modules for media picking, LUT sharing, camera support, and export
+Works on desktop and mobile (Chrome, Edge, Safari, etc.).
 
-## Requirements
+## Features
 
-- Node.js 22.11 or newer
-- npm
-- Android Studio with the Android SDK
-- JDK 17 or newer
-- A connected Android device or emulator for Android builds
+- Light, color, curves, HSL, detail
+- Lens & film: vignette, grain, halation, bokeh, anamorphic streaks
+- Masks and double exposure
+- Fully local — photos stay on your device
 
-## Setup
+## Develop locally
 
-Install dependencies:
-
-```sh
+```bash
+cd web
 npm install
+npm run dev
 ```
 
-Start Metro for development:
+Open http://localhost:5173
 
-```sh
-npm start
-```
+## Deploy
 
-Run on Android:
+Pushes to `main` that touch `web/` auto-deploy via GitHub Actions to GitHub Pages (`gh-pages` branch).
 
-```sh
-npm run android
-```
+Repo → **Settings → Pages** → source: **Deploy from branch** → `gh-pages` / root.
 
-## Install A Phone Build That Works Unplugged
+## Privacy
 
-For a phone build that keeps working after the USB cable is removed, install a release build:
-
-```sh
-cd android
-./gradlew installRelease
-```
-
-Release signing uses `android/keystore.properties` and a local keystore file. These are intentionally ignored by Git and should stay private.
-
-## GitHub Notes
-
-The repository should commit source files, configuration, assets, and lockfiles. It should not commit generated folders, local installers, APK/AAB outputs, local Android properties, signing files, or `node_modules`.
-
-Before publishing, check what will be committed:
-
-```sh
-git status
-```
+No accounts, no cloud storage, no photo uploads. Editing happens entirely in the browser.
