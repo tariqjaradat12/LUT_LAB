@@ -1,6 +1,7 @@
 import { BLEND_MODE_INDEX, HUE_BANDS, type CurveChannels, type CurvePoint, type EditParams } from './types';
 import { FRAG, VERT } from './shaderSource';
 import { hexToRgb } from '../lib/imageIO';
+import { lutDataToTextureBytes } from './lutEngine';
 
 function compile(gl: WebGLRenderingContext, type: number, src: string) {
   const s = gl.createShader(type)!;
@@ -45,7 +46,10 @@ export class GradeRenderer {
   private buf: WebGLBuffer;
   private tex: WebGLTexture | null = null;
   private blendTex: WebGLTexture | null = null;
+  private lutTex: WebGLTexture | null = null;
   private hasBlend = false;
+  private hasLut = false;
+  private lutSize = 33;
   private params: EditParams | null = null;
   private imageSize = { w: 1, h: 1 };
   private locs: Record<string, WebGLUniformLocation | null> = {};
@@ -89,10 +93,12 @@ export class GradeRenderer {
       'uLinMask', 'uLinStart', 'uLinEnd', 'uLinFeather', 'uCircMask', 'uCircCenter', 'uCircRadius',
       'uMaskExposure', 'uMaskSat',
       'uDxEnabled', 'uDxOpacity', 'uDxOffset', 'uDxBlend',
+      'uLut', 'uHasLut', 'uLutSize', 'uLutIntensity', 'uLutColorOffset', 'uLutToneOffset',
     ];
     for (const n of names) this.locs[n] = gl.getUniformLocation(prog, n);
     gl.uniform1i(this.locs.uImage, 0);
     gl.uniform1i(this.locs.uBlend, 1);
+    gl.uniform1i(this.locs.uLut, 2);
     gl.clearColor(0, 0, 0, 1);
   }
 
@@ -150,6 +156,29 @@ export class GradeRenderer {
     if (!this.blendTex) this.blendTex = this.gl.createTexture();
     this.upload(this.blendTex!, bitmap);
     this.hasBlend = true;
+    this.render();
+  }
+
+  setLut(data: Float32Array | null, size = 33) {
+    const gl = this.gl;
+    if (!data || data.length < size * size * size * 3) {
+      this.hasLut = false;
+      this.render();
+      return;
+    }
+    if (!this.lutTex) this.lutTex = gl.createTexture();
+    this.lutSize = size;
+    const bytes = lutDataToTextureBytes(data);
+    const w = size * size;
+    const h = size;
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.lutTex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, w, h, 0, gl.RGB, gl.UNSIGNED_BYTE, bytes);
+    this.hasLut = true;
     this.render();
   }
 
@@ -230,6 +259,11 @@ export class GradeRenderer {
     gl.uniform1f(L.uDxOpacity, p.doubleExposureOpacity);
     gl.uniform2f(L.uDxOffset, p.doubleExposureOffset.x, p.doubleExposureOffset.y);
     gl.uniform1i(L.uDxBlend, BLEND_MODE_INDEX[p.doubleExposureBlend]);
+    gl.uniform1i(L.uHasLut, this.hasLut ? 1 : 0);
+    gl.uniform1f(L.uLutSize, this.lutSize);
+    gl.uniform1f(L.uLutIntensity, p.lutIntensity);
+    gl.uniform1f(L.uLutColorOffset, p.lutColorOffset);
+    gl.uniform1f(L.uLutToneOffset, p.lutToneOffset);
   }
 
   render() {
@@ -244,6 +278,8 @@ export class GradeRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.tex);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.hasBlend && this.blendTex ? this.blendTex : this.tex);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.hasLut && this.lutTex ? this.lutTex : this.tex);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
@@ -272,6 +308,7 @@ export class GradeRenderer {
     const gl = this.gl;
     if (this.tex) gl.deleteTexture(this.tex);
     if (this.blendTex) gl.deleteTexture(this.blendTex);
+    if (this.lutTex) gl.deleteTexture(this.lutTex);
     gl.deleteBuffer(this.buf);
     gl.deleteProgram(this.program);
   }

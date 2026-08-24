@@ -16,7 +16,7 @@ type PinDef = {
 
 export function PreviewStage({ rendererRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { params, imageBitmap, blendBitmap, hasImage, section, filmSub, patchParams, setError } =
+  const { params, imageBitmap, blendBitmap, hasImage, section, filmSub, patchParams, setError, activeLutData } =
     useEditStore();
 
   const pins: PinDef[] = [];
@@ -102,6 +102,12 @@ export function PreviewStage({ rendererRef }: Props) {
   useEffect(() => {
     rendererRef.current?.setBlendImage(blendBitmap);
   }, [blendBitmap, rendererRef]);
+
+  useEffect(() => {
+    const r = rendererRef.current;
+    if (!r) return;
+    r.setLut(activeLutData, 33);
+  }, [activeLutData, rendererRef]);
 
   useEffect(() => {
     rendererRef.current?.setParams(params);

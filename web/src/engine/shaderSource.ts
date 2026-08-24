@@ -80,6 +80,62 @@ uniform float uDxOpacity;
 uniform vec2 uDxOffset;
 uniform int uDxBlend;
 
+uniform sampler2D uLut;
+uniform int uHasLut;
+uniform float uLutSize;
+uniform float uLutIntensity;
+uniform float uLutColorOffset;
+uniform float uLutToneOffset;
+
+vec3 sampleLut(vec3 c) {
+  float N = uLutSize;
+  float invNN = 1.0 / (N * N);
+  float invN = 1.0 / N;
+  float r = c.r * (N - 1.0);
+  float g = c.g * (N - 1.0);
+  float b = c.b * (N - 1.0);
+  float r0 = floor(r);
+  float r1 = min(r0 + 1.0, N - 1.0);
+  float g0 = floor(g);
+  float g1 = min(g0 + 1.0, N - 1.0);
+  float b0 = floor(b);
+  float b1 = min(b0 + 1.0, N - 1.0);
+  float dr = r - r0;
+  float dg = g - g0;
+  float db = b - b0;
+  vec3 c000 = texture2D(uLut, vec2((g0 * N + r0 + 0.5) * invNN, (b0 + 0.5) * invN)).rgb;
+  vec3 c100 = texture2D(uLut, vec2((g0 * N + r1 + 0.5) * invNN, (b0 + 0.5) * invN)).rgb;
+  vec3 c010 = texture2D(uLut, vec2((g1 * N + r0 + 0.5) * invNN, (b0 + 0.5) * invN)).rgb;
+  vec3 c110 = texture2D(uLut, vec2((g1 * N + r1 + 0.5) * invNN, (b0 + 0.5) * invN)).rgb;
+  vec3 c001 = texture2D(uLut, vec2((g0 * N + r0 + 0.5) * invNN, (b1 + 0.5) * invN)).rgb;
+  vec3 c101 = texture2D(uLut, vec2((g0 * N + r1 + 0.5) * invNN, (b1 + 0.5) * invN)).rgb;
+  vec3 c011 = texture2D(uLut, vec2((g1 * N + r0 + 0.5) * invNN, (b1 + 0.5) * invN)).rgb;
+  vec3 c111 = texture2D(uLut, vec2((g1 * N + r1 + 0.5) * invNN, (b1 + 0.5) * invN)).rgb;
+  vec3 c00 = mix(c000, c100, dr);
+  vec3 c01 = mix(c001, c101, dr);
+  vec3 c10 = mix(c010, c110, dr);
+  vec3 c11 = mix(c011, c111, dr);
+  vec3 c0 = mix(c00, c10, dg);
+  vec3 c1 = mix(c01, c11, dg);
+  return mix(c0, c1, db);
+}
+
+vec3 applyLutGrade(vec3 src) {
+  vec3 target = sampleLut(clamp(src, 0.0, 1.0));
+  if (abs(uLutToneOffset) > 0.01) {
+    float factor = pow(2.0, (uLutToneOffset / 100.0) * 1.5);
+    target *= factor;
+  }
+  if (abs(uLutColorOffset) > 0.01) {
+    float shift = (uLutColorOffset / 100.0) * 0.25;
+    target.r = clamp(target.r + shift, 0.0, 1.0);
+    target.g = clamp(target.g - shift * 0.5, 0.0, 1.0);
+    target.b = clamp(target.b - shift, 0.0, 1.0);
+  }
+  float t = uLutIntensity / 100.0;
+  return mix(src, clamp(target, 0.0, 1.0), t);
+}
+
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
@@ -241,6 +297,10 @@ float linearMaskWeight(vec2 uv) {
 void main() {
   vec2 uv = vUv;
   vec3 rgb = sampleImg(uv);
+
+  if (uHasLut == 1) {
+    rgb = applyLutGrade(rgb);
+  }
 
   // Anamorphic streaks
   if (uLongAmt > 0.5) {

@@ -2,12 +2,15 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
 import { type EditParams, type FilmSubTab, type ToolSection } from '../engine/types';
+import { type ImportedLut, importCubeContent, loadPresetLut } from '../engine/lutEngine';
 import { loadImageFromFile } from '../lib/imageIO';
+import { BUILTIN_LUT_PRESETS, presetCubeUrl } from '../lib/lutPresets';
 import { cloneDefaultParams } from '../lib/params';
 
 type Store = {
@@ -27,9 +30,30 @@ type Store = {
   setSection: (s: ToolSection) => void;
   filmSub: FilmSubTab;
   setFilmSub: (s: FilmSubTab) => void;
+  presetLuts: ImportedLut[];
+  presetsLoading: boolean;
+  importedLuts: ImportedLut[];
+  activeLutId: string | null;
+  activeLutData: Float32Array | null;
+  importLutFile: (file: File) => Promise<void>;
+  selectLut: (id: string | null) => void;
+  removeLut: (id: string) => void;
 };
 
 const EditCtx = createContext<Store | null>(null);
+
+function findLutData(
+  id: string | null,
+  presetLuts: ImportedLut[],
+  importedLuts: ImportedLut[],
+): Float32Array | null {
+  if (!id) return null;
+  return (
+    presetLuts.find((l) => l.id === id)?.data ??
+    importedLuts.find((l) => l.id === id)?.data ??
+    null
+  );
+}
 
 export function EditProvider({ children }: { children: ReactNode }) {
   const [params, setParams] = useState<EditParams>(() => cloneDefaultParams());
@@ -38,6 +62,38 @@ export function EditProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [section, setSection] = useState<ToolSection>('light');
   const [filmSub, setFilmSub] = useState<FilmSubTab>('halation');
+  const [presetLuts, setPresetLuts] = useState<ImportedLut[]>([]);
+  const [presetsLoading, setPresetsLoading] = useState(true);
+  const [importedLuts, setImportedLuts] = useState<ImportedLut[]>([]);
+  const [activeLutId, setActiveLutId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const loaded = await Promise.all(
+          BUILTIN_LUT_PRESETS.map((p) =>
+            loadPresetLut(p.id, p.name, presetCubeUrl(p.file)),
+          ),
+        );
+        if (!cancelled) setPresetLuts(loaded);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'Could not load LUT presets.');
+        }
+      } finally {
+        if (!cancelled) setPresetsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const activeLutData = useMemo(
+    () => findLutData(activeLutId, presetLuts, importedLuts),
+    [activeLutId, presetLuts, importedLuts],
+  );
 
   const setParam = useCallback(<K extends keyof EditParams>(key: K, value: EditParams[K]) => {
     setParams((p) => ({ ...p, [key]: value }));
@@ -55,10 +111,21 @@ export function EditProvider({ children }: { children: ReactNode }) {
     setParams((p) => ({ ...p, doubleExposureEnabled: false }));
   }, []);
 
+  const clearLut = useCallback(() => {
+    setActiveLutId(null);
+    setParams((p) => ({
+      ...p,
+      lutIntensity: 100,
+      lutColorOffset: 0,
+      lutToneOffset: 0,
+    }));
+  }, []);
+
   const resetParams = useCallback(() => {
     setParams(cloneDefaultParams());
     clearBlend();
-  }, [clearBlend]);
+    clearLut();
+  }, [clearBlend, clearLut]);
 
   const openImage = useCallback(async (file: File) => {
     try {
@@ -69,11 +136,12 @@ export function EditProvider({ children }: { children: ReactNode }) {
       });
       setParams(cloneDefaultParams());
       clearBlend();
+      clearLut();
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open that file.');
     }
-  }, [clearBlend]);
+  }, [clearBlend, clearLut]);
 
   const openBlendImage = useCallback(async (file: File) => {
     try {
@@ -88,6 +156,51 @@ export function EditProvider({ children }: { children: ReactNode }) {
       setError(e instanceof Error ? e.message : 'Could not open blend photo.');
     }
   }, []);
+
+  const importLutFile = useCallback(async (file: File) => {
+    try {
+      const content = await file.text();
+      const { lut, importedLuts: next } = importCubeContent(
+        content,
+        file.name,
+        importedLuts,
+      );
+      setImportedLuts(next);
+      setActiveLutId(lut.id);
+      setParams((p) => ({
+        ...p,
+        lutIntensity: 100,
+        lutColorOffset: 0,
+        lutToneOffset: 0,
+      }));
+      setSection('luts');
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not parse that LUT file.');
+    }
+  }, [importedLuts]);
+
+  const selectLut = useCallback((id: string | null) => {
+    if (id === activeLutId) {
+      clearLut();
+      return;
+    }
+    setActiveLutId(id);
+    if (id) {
+      setParams((p) => ({
+        ...p,
+        lutIntensity: 100,
+        lutColorOffset: 0,
+        lutToneOffset: 0,
+      }));
+    }
+  }, [activeLutId, clearLut]);
+
+  const removeLut = useCallback((id: string) => {
+    if (id.startsWith('preset_')) return;
+    setImportedLuts((prev) => prev.filter((l) => l.id !== id));
+    if (activeLutId === id) clearLut();
+  }, [activeLutId, clearLut]);
 
   const value = useMemo(
     () => ({
@@ -107,10 +220,20 @@ export function EditProvider({ children }: { children: ReactNode }) {
       setSection,
       filmSub,
       setFilmSub,
+      presetLuts,
+      presetsLoading,
+      importedLuts,
+      activeLutId,
+      activeLutData,
+      importLutFile,
+      selectLut,
+      removeLut,
     }),
     [
       params, setParam, patchParams, resetParams, imageBitmap, blendBitmap,
       error, openImage, openBlendImage, clearBlend, section, filmSub,
+      presetLuts, presetsLoading, importedLuts, activeLutId, activeLutData,
+      importLutFile, selectLut, removeLut,
     ],
   );
 

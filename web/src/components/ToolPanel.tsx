@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { BLEND_MODES, HUE_BANDS, type FilmSubTab, type HueBand, type ToolSection } from '../engine/types';
+import { getLutDisplayName } from '../lib/lutPresets';
 import { useEditStore } from '../state/editStore';
 import { CurveEditor } from './CurveEditor';
+import { LutCustomizerPad } from './LutCustomizerPad';
 import { Slider, Toggle } from './Slider';
 
 const SECTIONS: { id: ToolSection; label: string }[] = [
@@ -13,6 +15,7 @@ const SECTIONS: { id: ToolSection; label: string }[] = [
   { id: 'film', label: 'Lens & Film' },
   { id: 'masks', label: 'Masks' },
   { id: 'double', label: 'Double exposure' },
+  { id: 'luts', label: 'LUTs' },
 ];
 
 const pct = (v: number) => `${Math.round(v)}`;
@@ -31,6 +34,8 @@ export function ToolPanel() {
   const {
     params, setParam, patchParams, section, setSection, filmSub, setFilmSub,
     openBlendImage, clearBlend, blendBitmap,
+    importedLuts, activeLutId, importLutFile, selectLut, removeLut,
+    presetLuts, presetsLoading,
   } = useEditStore();
   const [hslBand, setHslBand] = useState<HueBand>('red');
 
@@ -242,6 +247,104 @@ export function ToolPanel() {
               onChange={(v) => patchParams({ doubleExposureOffset: { ...params.doubleExposureOffset, y: v } })}
               format={(v) => v.toFixed(2)}
             />
+          </>
+        )}
+
+        {section === 'luts' && (
+          <>
+            <p className="hint">Pick a preset or import your own .cube LUT, then drag the square to fine-tune color and tone.</p>
+
+            <p className="section-label">Presets</p>
+            {presetsLoading ? (
+              <p className="hint">Loading presets…</p>
+            ) : (
+              <div className="chip-row" style={{ marginBottom: '0.85rem' }}>
+                {presetLuts.map((lut) => (
+                  <button
+                    key={lut.id}
+                    type="button"
+                    className={`chip${activeLutId === lut.id ? ' active' : ''}`}
+                    onClick={() => selectLut(lut.id)}
+                    title={activeLutId === lut.id ? 'Tap again to disable' : 'Apply LUT'}
+                  >
+                    {lut.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <p className="section-label">Import</p>
+            <label className="btn file-btn" style={{ marginBottom: '0.75rem' }}>
+              Import .cube LUT
+              <input
+                type="file"
+                accept=".cube,text/plain"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void importLutFile(f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+
+            {importedLuts.length > 0 && (
+              <>
+                <p className="section-label">Your LUTs</p>
+                <div className="chip-row" style={{ marginBottom: '0.75rem' }}>
+                  {importedLuts.map((lut) => (
+                    <button
+                      key={lut.id}
+                      type="button"
+                      className={`chip${activeLutId === lut.id ? ' active' : ''}`}
+                      onClick={() => selectLut(lut.id)}
+                      title={activeLutId === lut.id ? 'Tap again to disable' : 'Apply LUT'}
+                    >
+                      {lut.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {activeLutId && (
+              <>
+                <div className="row" style={{ marginBottom: '0.5rem' }}>
+                  <span>{getLutDisplayName(activeLutId, presetLuts, importedLuts)}</span>
+                  <button type="button" className="btn" onClick={() => selectLut(null)}>
+                    Clear
+                  </button>
+                </div>
+                <LutCustomizerPad
+                  colorOffset={params.lutColorOffset}
+                  toneOffset={params.lutToneOffset}
+                  onValuesChange={(colorOffset, toneOffset) =>
+                    patchParams({ lutColorOffset: colorOffset, lutToneOffset: toneOffset })
+                  }
+                />
+                <Slider
+                  label="Mix"
+                  value={params.lutIntensity}
+                  min={0}
+                  max={100}
+                  onChange={(v) => setParam('lutIntensity', v)}
+                  format={pct}
+                />
+                {!activeLutId.startsWith('preset_') && (
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ marginTop: '0.5rem' }}
+                    onClick={() => removeLut(activeLutId)}
+                  >
+                    Remove from list
+                  </button>
+                )}
+              </>
+            )}
+
+            {!activeLutId && !presetsLoading && importedLuts.length === 0 && (
+              <p className="hint">Tap a preset above to start grading.</p>
+            )}
           </>
         )}
       </div>

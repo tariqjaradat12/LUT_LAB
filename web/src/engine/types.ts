@@ -100,6 +100,9 @@ export interface EditParams {
   doubleExposureOpacity: number;
   doubleExposureOffset: Point2D;
   doubleExposureBlend: DoubleExposureBlend;
+  lutIntensity: number;
+  lutColorOffset: number;
+  lutToneOffset: number;
 }
 
 export const defaultCurve = (): CurvePoint[] => [
@@ -174,6 +177,9 @@ export const DEFAULT_EDIT_PARAMS: EditParams = {
   doubleExposureOpacity: 0.5,
   doubleExposureOffset: { x: 0, y: 0 },
   doubleExposureBlend: 'additive',
+  lutIntensity: 100,
+  lutColorOffset: 0,
+  lutToneOffset: 0,
 };
 
 export type ToolSection =
@@ -184,6 +190,7 @@ export type ToolSection =
   | 'detail'
   | 'film'
   | 'masks'
-  | 'double';
+  | 'double'
+  | 'luts';
 
 export type FilmSubTab = 'vignette' | 'grain' | 'halation' | 'bokeh' | 'anamorphic';
