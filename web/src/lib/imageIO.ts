@@ -2,8 +2,17 @@ export async function loadImageFromFile(file: File): Promise<ImageBitmap> {
   if (!file.type.startsWith('image/')) {
     throw new Error('Please choose a JPEG or PNG photo.');
   }
-  const bitmap = await createImageBitmap(file);
-  return bitmap;
+  const decoded = await createImageBitmap(file);
+  // Flatten any alpha onto black so semi-transparent PNGs don't look washed/faded.
+  const flat = document.createElement('canvas');
+  flat.width = decoded.width;
+  flat.height = decoded.height;
+  const ctx = flat.getContext('2d', { colorSpace: 'srgb' })!;
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, flat.width, flat.height);
+  ctx.drawImage(decoded, 0, 0);
+  decoded.close();
+  return createImageBitmap(flat);
 }
 
 export function downloadCanvas(

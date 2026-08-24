@@ -67,11 +67,13 @@ export function EditProvider({ children }: { children: ReactNode }) {
         prev?.close();
         return bmp;
       });
+      setParams(cloneDefaultParams());
+      clearBlend();
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open that file.');
     }
-  }, []);
+  }, [clearBlend]);
 
   const openBlendImage = useCallback(async (file: File) => {
     try {

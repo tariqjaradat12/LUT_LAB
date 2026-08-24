@@ -1,4 +1,4 @@
-import { BLEND_MODE_INDEX, HUE_BANDS, type EditParams } from './types';
+import { BLEND_MODE_INDEX, HUE_BANDS, type CurveChannels, type CurvePoint, type EditParams } from './types';
 import { FRAG, VERT } from './shaderSource';
 import { hexToRgb } from '../lib/imageIO';
 
@@ -22,6 +22,21 @@ function curveYs(points: { y: number }[]) {
     points[3]?.y ?? 0.75,
     points[4]?.y ?? 1,
   ]);
+}
+
+const IDENTITY_Y = [0, 0.25, 0.5, 0.75, 1];
+
+function channelIsIdentity(points: CurvePoint[]) {
+  return points.length >= 5 && points.every((p, i) => Math.abs(p.y - IDENTITY_Y[i]) < 0.002);
+}
+
+function curvesAreIdentity(curves: CurveChannels) {
+  return (
+    channelIsIdentity(curves.rgb) &&
+    channelIsIdentity(curves.r) &&
+    channelIsIdentity(curves.g) &&
+    channelIsIdentity(curves.b)
+  );
 }
 
 export class GradeRenderer {
@@ -63,7 +78,7 @@ export class GradeRenderer {
       'uImage', 'uBlend', 'uHasBlend', 'uResolution',
       'uExposure', 'uBrightness', 'uContrast', 'uHighlights', 'uShadows',
       'uSaturation', 'uVibrance', 'uTemperature', 'uTint', 'uHue', 'uBw',
-      'uCurveW', 'uCurveR', 'uCurveG', 'uCurveB',
+      'uCurveW', 'uCurveR', 'uCurveG', 'uCurveB', 'uCurvesEnabled',
       'uHslH', 'uHslS', 'uHslL',
       'uSharpen', 'uDefinition', 'uSoftness', 'uDenoiseL', 'uDenoiseC',
       'uVigStrength', 'uVigRadius', 'uVigSoft',
@@ -78,6 +93,33 @@ export class GradeRenderer {
     for (const n of names) this.locs[n] = gl.getUniformLocation(prog, n);
     gl.uniform1i(this.locs.uImage, 0);
     gl.uniform1i(this.locs.uBlend, 1);
+    gl.clearColor(0, 0, 0, 1);
+  }
+
+  /** Fit canvas to stage while preserving photo aspect ratio. */
+  fitToStage(stageW: number, stageH: number) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const imgAspect = this.imageSize.w / Math.max(1, this.imageSize.h);
+    let cssW = stageW;
+    let cssH = stageH;
+    if (stageW > 0 && stageH > 0) {
+      const stageAspect = stageW / stageH;
+      if (stageAspect > imgAspect) {
+        cssH = stageH;
+        cssW = cssH * imgAspect;
+      } else {
+        cssW = stageW;
+        cssH = cssW / imgAspect;
+      }
+    }
+    this.canvas.style.width = `${Math.floor(cssW)}px`;
+    this.canvas.style.height = `${Math.floor(cssH)}px`;
+    const w = Math.max(1, Math.floor(cssW * dpr));
+    const h = Math.max(1, Math.floor(cssH * dpr));
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+    }
   }
 
   private upload(target: WebGLTexture, bitmap: ImageBitmap) {
@@ -94,7 +136,8 @@ export class GradeRenderer {
     if (!this.tex) this.tex = this.gl.createTexture();
     this.upload(this.tex!, bitmap);
     this.imageSize = { w: bitmap.width, h: bitmap.height };
-    this.resize();
+    const stage = this.canvas.parentElement;
+    if (stage) this.fitToStage(stage.clientWidth, stage.clientHeight);
     this.render();
   }
 
@@ -116,14 +159,8 @@ export class GradeRenderer {
   }
 
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const rect = this.canvas.getBoundingClientRect();
-    const w = Math.max(1, Math.floor(rect.width * dpr));
-    const h = Math.max(1, Math.floor(rect.height * dpr));
-    if (this.canvas.width !== w || this.canvas.height !== h) {
-      this.canvas.width = w;
-      this.canvas.height = h;
-    }
+    const stage = this.canvas.parentElement;
+    if (stage) this.fitToStage(stage.clientWidth, stage.clientHeight);
   }
 
   private applyUniforms(p: EditParams) {
@@ -146,6 +183,7 @@ export class GradeRenderer {
     gl.uniform1fv(L.uCurveR, curveYs(p.curves.r));
     gl.uniform1fv(L.uCurveG, curveYs(p.curves.g));
     gl.uniform1fv(L.uCurveB, curveYs(p.curves.b));
+    gl.uniform1i(L.uCurvesEnabled, curvesAreIdentity(p.curves) ? 0 : 1);
     const hArr = new Float32Array(8);
     const sArr = new Float32Array(8);
     const lArr = new Float32Array(8);
@@ -199,6 +237,7 @@ export class GradeRenderer {
     if (!this.tex || !this.params) return;
     this.resize();
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.clear(this.gl.COLOR_BUFFER_BIT);
     gl.useProgram(this.program);
     this.applyUniforms(this.params);
     gl.activeTexture(gl.TEXTURE0);

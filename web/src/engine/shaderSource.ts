@@ -32,6 +32,7 @@ uniform float uCurveW[5];
 uniform float uCurveR[5];
 uniform float uCurveG[5];
 uniform float uCurveB[5];
+uniform int uCurvesEnabled;
 
 uniform float uHslH[8];
 uniform float uHslS[8];
@@ -286,13 +287,15 @@ void main() {
     rgb = vec3(g);
   }
 
-  float wr = evalCurve(rgb.r, uCurveW[0], uCurveW[1], uCurveW[2], uCurveW[3], uCurveW[4]);
-  float wg = evalCurve(rgb.g, uCurveW[0], uCurveW[1], uCurveW[2], uCurveW[3], uCurveW[4]);
-  float wb = evalCurve(rgb.b, uCurveW[0], uCurveW[1], uCurveW[2], uCurveW[3], uCurveW[4]);
-  rgb = vec3(wr, wg, wb);
-  rgb.r = evalCurve(rgb.r, uCurveR[0], uCurveR[1], uCurveR[2], uCurveR[3], uCurveR[4]);
-  rgb.g = evalCurve(rgb.g, uCurveG[0], uCurveG[1], uCurveG[2], uCurveG[3], uCurveG[4]);
-  rgb.b = evalCurve(rgb.b, uCurveB[0], uCurveB[1], uCurveB[2], uCurveB[3], uCurveB[4]);
+  if (uCurvesEnabled == 1) {
+    float wr = evalCurve(rgb.r, uCurveW[0], uCurveW[1], uCurveW[2], uCurveW[3], uCurveW[4]);
+    float wg = evalCurve(rgb.g, uCurveW[0], uCurveW[1], uCurveW[2], uCurveW[3], uCurveW[4]);
+    float wb = evalCurve(rgb.b, uCurveW[0], uCurveW[1], uCurveW[2], uCurveW[3], uCurveW[4]);
+    rgb = vec3(wr, wg, wb);
+    rgb.r = evalCurve(rgb.r, uCurveR[0], uCurveR[1], uCurveR[2], uCurveR[3], uCurveR[4]);
+    rgb.g = evalCurve(rgb.g, uCurveG[0], uCurveG[1], uCurveG[2], uCurveG[3], uCurveG[4]);
+    rgb.b = evalCurve(rgb.b, uCurveB[0], uCurveB[1], uCurveB[2], uCurveB[3], uCurveB[4]);
+  }
 
   if (abs(uDefinition) > 0.1) {
     vec2 px = 1.0 / uResolution;
