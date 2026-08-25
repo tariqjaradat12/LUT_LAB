@@ -177,6 +177,72 @@ button {
 }
 .stage-empty p { margin: 0; line-height: 1.45; }
 
+.color-badge {
+  position: absolute;
+  top: 0.45rem;
+  left: 0.45rem;
+  z-index: 3;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgba(12, 11, 10, 0.78);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.video-transport {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.55rem;
+  background: rgba(12, 11, 10, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.video-transport-play {
+  flex: 0 0 auto;
+  min-width: 3.4rem;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.video-transport-play:hover {
+  border-color: var(--accent-dim);
+}
+
+.video-transport-time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  color: var(--muted);
+  min-width: 2.4rem;
+}
+
+.video-transport-scrub {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1.25rem;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
 .hal-pin {
   position: absolute;
   width: 32px;

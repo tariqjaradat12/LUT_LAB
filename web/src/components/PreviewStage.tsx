@@ -1,6 +1,7 @@
 import { useEffect, useRef, type MutableRefObject, type PointerEvent as ReactPointerEvent } from 'react';
 import { GradeRenderer } from '../engine/renderer';
 import { useEditStore } from '../state/editStore';
+import { VideoTransport } from './VideoTransport';
 
 type Props = {
   rendererRef: MutableRefObject<GradeRenderer | null>;
@@ -17,12 +18,25 @@ type PinDef = {
 export function PreviewStage({ rendererRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLElement>(null);
-  const { params, imageBitmap, blendBitmap, hasImage, section, filmSub, patchParams, setError, activeLutData } =
-    useEditStore();
+  const {
+    params,
+    imageBitmap,
+    blendBitmap,
+    hasMedia,
+    mediaKind,
+    videoEl,
+    videoDuration,
+    section,
+    filmSub,
+    patchParams,
+    setError,
+    activeLutData,
+  } = useEditStore();
 
   const pins: PinDef[] = [];
+  const pinMedia = hasMedia;
 
-  if (hasImage && section === 'film' && filmSub === 'halation') {
+  if (pinMedia && section === 'film' && filmSub === 'halation') {
     pins.push({
       id: 'halation',
       x: params.halationCenter.x,
@@ -32,7 +46,7 @@ export function PreviewStage({ rendererRef }: Props) {
     });
   }
 
-  if (hasImage && section === 'film' && filmSub === 'anamorphic') {
+  if (pinMedia && section === 'film' && filmSub === 'anamorphic') {
     pins.push({
       id: 'anamorphic',
       x: params.longExposureCenter.x,
@@ -42,7 +56,7 @@ export function PreviewStage({ rendererRef }: Props) {
     });
   }
 
-  if (hasImage && section === 'film' && filmSub === 'bokeh') {
+  if (pinMedia && section === 'film' && filmSub === 'bokeh') {
     pins.push({
       id: 'bokeh',
       x: params.bokehCenter.x,
@@ -52,7 +66,7 @@ export function PreviewStage({ rendererRef }: Props) {
     });
   }
 
-  if (hasImage && section === 'masks' && params.circularMaskEnabled) {
+  if (pinMedia && section === 'masks' && params.circularMaskEnabled) {
     pins.push({
       id: 'circ-mask',
       x: params.circularMaskCenter.x,
@@ -62,7 +76,7 @@ export function PreviewStage({ rendererRef }: Props) {
     });
   }
 
-  if (hasImage && section === 'masks' && params.linearMaskEnabled) {
+  if (pinMedia && section === 'masks' && params.linearMaskEnabled) {
     pins.push({
       id: 'lin-mask-a',
       x: params.linearMaskStart.x,
@@ -96,9 +110,9 @@ export function PreviewStage({ rendererRef }: Props) {
 
   useEffect(() => {
     const r = rendererRef.current;
-    if (!r || !imageBitmap) return;
+    if (!r || !imageBitmap || mediaKind === 'video') return;
     r.setImage(imageBitmap);
-  }, [imageBitmap, rendererRef]);
+  }, [imageBitmap, mediaKind, rendererRef]);
 
   useEffect(() => {
     rendererRef.current?.setBlendImage(blendBitmap);
@@ -113,6 +127,66 @@ export function PreviewStage({ rendererRef }: Props) {
   useEffect(() => {
     rendererRef.current?.setParams(params);
   }, [params, rendererRef]);
+
+  useEffect(() => {
+    if (mediaKind !== 'video' || !videoEl) return;
+
+    let cancelled = false;
+    let rafId = 0;
+    let rvfcId: number | null = null;
+    const video = videoEl;
+    const useRvfc = typeof video.requestVideoFrameCallback === 'function';
+
+    const drawFrame = () => {
+      if (cancelled || document.hidden) return;
+      const r = rendererRef.current;
+      if (!r) return;
+      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      r.setVideoFrame(video);
+      r.render();
+    };
+
+    const scheduleRvfc = () => {
+      rvfcId = video.requestVideoFrameCallback(() => {
+        if (cancelled) return;
+        drawFrame();
+        scheduleRvfc();
+      });
+    };
+
+    const scheduleRaf = () => {
+      rafId = requestAnimationFrame(() => {
+        if (cancelled) return;
+        drawFrame();
+        scheduleRaf();
+      });
+    };
+
+    const onSeeked = () => drawFrame();
+    const onLoadedData = () => drawFrame();
+    const onVisibility = () => {
+      if (!document.hidden) drawFrame();
+    };
+
+    video.addEventListener('seeked', onSeeked);
+    video.addEventListener('loadeddata', onLoadedData);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    drawFrame();
+    if (useRvfc) scheduleRvfc();
+    else scheduleRaf();
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('loadeddata', onLoadedData);
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (rvfcId != null && typeof video.cancelVideoFrameCallback === 'function') {
+        video.cancelVideoFrameCallback(rvfcId);
+      }
+      cancelAnimationFrame(rafId);
+    };
+  }, [mediaKind, videoEl, rendererRef]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -161,13 +235,13 @@ export function PreviewStage({ rendererRef }: Props) {
 
   return (
     <section className="stage" ref={stageRef}>
-      {!hasImage && (
+      {!hasMedia && (
         <div className="stage-empty">
           <h2>Open a still</h2>
           <p>Grade locally in the browser. Nothing leaves your device.</p>
         </div>
       )}
-      <div className="stage-frame" style={{ display: hasImage ? 'block' : 'none' }}>
+      <div className="stage-frame" style={{ display: hasMedia ? 'block' : 'none' }}>
         <canvas ref={canvasRef} />
         {pins.map((pin) => (
           <div
@@ -178,7 +252,11 @@ export function PreviewStage({ rendererRef }: Props) {
             title={pin.title}
           />
         ))}
+        {mediaKind === 'video' && <div className="color-badge">Rec.709</div>}
       </div>
+      {mediaKind === 'video' && videoEl && (
+        <VideoTransport video={videoEl} duration={videoDuration} />
+      )}
     </section>
   );
 }
