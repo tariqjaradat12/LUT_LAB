@@ -346,28 +346,47 @@ float linearToRec709(float L) {
   return 1.099 * pow(L, 0.45) - 0.099;
 }
 
-// Generic camera-log decode (S-Log3-shaped) → scene-linear reflection.
-float slog3ToLinear(float x) {
+// S-Log3-shaped decode, then scale so 18% gray (code 420/1023) lands at 0.18 scene-linear.
+// Without that scale, midtones decode near ~0.87 and the image looks blown out.
+float genericLogToLinear(float x) {
   x = clamp(x, 0.0, 1.0);
+  float y;
   if (x >= 171.2102946929 / 1023.0) {
-    return (pow(10.0, (x * 1023.0 - 420.0) / 261.5) - 0.037584) * 0.9;
+    y = (pow(10.0, (x * 1023.0 - 420.0) / 261.5) - 0.037584) * 0.9;
+  } else {
+    y = (x * 1023.0 - 95.0) * 0.01125000 / (171.2102946929 - 95.0);
   }
-  return (x * 1023.0 - 95.0) * 0.01125000 / (171.2102946929 - 95.0);
+  const float midLin = (1.0 - 0.037584) * 0.9;
+  return y * (0.18 / midLin);
 }
 
+float softHighlight(float x) {
+  // Preserve midtones; only compress above ~middle grey headroom.
+  float knee = 0.5;
+  if (x <= knee) return x;
+  float t = x - knee;
+  return knee + t / (1.0 + t * 1.1);
+}
+
+// Generic log → Rec.709: good enough for flat/log clips without cooking exposure.
 vec3 logToRec709(vec3 logRgb) {
   vec3 lin = vec3(
-    slog3ToLinear(logRgb.r),
-    slog3ToLinear(logRgb.g),
-    slog3ToLinear(logRgb.b)
+    genericLogToLinear(logRgb.r),
+    genericLogToLinear(logRgb.g),
+    genericLogToLinear(logRgb.b)
   );
-  // Soft highlight rolloff so values > 1 still encode into Rec.709 display range.
-  lin = lin / (1.0 + lin * 0.35);
-  return vec3(
+  // Phone / “generic” log often sits a touch hotter than true S-Log3 mid placement.
+  lin *= 0.85;
+  lin = vec3(softHighlight(lin.r), softHighlight(lin.g), softHighlight(lin.b));
+  vec3 rec = vec3(
     linearToRec709(lin.r),
     linearToRec709(lin.g),
     linearToRec709(lin.b)
   );
+  // Flat log looks desaturated after contrast returns — mild restore.
+  float y = dot(rec, vec3(0.2126, 0.7152, 0.0722));
+  rec = mix(vec3(y), rec, 1.1);
+  return clamp(rec, 0.0, 1.0);
 }
 
 void main() {
