@@ -21,6 +21,7 @@ export default function App() {
   const rendererRef = useRef<GradeRenderer | null>(null);
   const exportingRef = useRef(false);
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<number | null>(null);
 
   const onExport = async () => {
     try {
@@ -35,10 +36,16 @@ export default function App() {
         }
         exportingRef.current = true;
         setExporting(true);
+        setExportProgress(0);
         const blob = await exportGradedVideo({
           video: videoEl,
           renderer: rendererRef.current,
           params,
+          onProgress: (t) => {
+            if (videoDuration > 0) {
+              setExportProgress(Math.min(100, (t / videoDuration) * 100));
+            }
+          },
         });
         const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
         downloadBlob(blob, `lut-lab-export.${ext}`);
@@ -51,6 +58,7 @@ export default function App() {
     } finally {
       exportingRef.current = false;
       setExporting(false);
+      setExportProgress(null);
     }
   };
 
@@ -58,7 +66,12 @@ export default function App() {
     <div className="app">
       <div className="app-chrome">
         <TopBar onExport={() => void onExport()} exporting={exporting} />
-        {exporting && <div className="error-banner">Exporting…</div>}
+        {exporting && (
+          <div className="export-banner">
+            Exporting…
+            {exportProgress != null && ` ${Math.round(exportProgress)}%`}
+          </div>
+        )}
         {error && !exporting && <div className="error-banner">{error}</div>}
       </div>
       <PreviewStage
