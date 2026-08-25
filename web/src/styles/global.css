@@ -199,8 +199,15 @@ button {
   background: rgba(12, 11, 10, 0.78);
   border: 1px solid var(--line);
   border-radius: 3px;
-  pointer-events: none;
   user-select: none;
+  cursor: pointer;
+  pointer-events: auto;
+  font-family: inherit;
+}
+.color-badge.is-on {
+  color: var(--text);
+  border-color: rgba(232, 220, 196, 0.55);
+  background: rgba(40, 36, 30, 0.92);
 }
 
 .video-transport {

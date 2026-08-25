@@ -103,6 +103,8 @@ export interface EditParams {
   lutIntensity: number;
   lutColorOffset: number;
   lutToneOffset: number;
+  /** Generic log → Rec.709 conversion (video). Off by default. */
+  logToRec709: boolean;
 }
 
 export const defaultCurve = (): CurvePoint[] => [
@@ -180,6 +182,7 @@ export const DEFAULT_EDIT_PARAMS: EditParams = {
   lutIntensity: 100,
   lutColorOffset: 0,
   lutToneOffset: 0,
+  logToRec709: false,
 };
 
 export type ToolSection =

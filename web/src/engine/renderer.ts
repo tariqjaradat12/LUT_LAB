@@ -107,6 +107,7 @@ export class GradeRenderer {
       'uMaskExposure', 'uMaskSat',
       'uDxEnabled', 'uDxOpacity', 'uDxOffset', 'uDxBlend',
       'uLut', 'uHasLut', 'uLutSize', 'uLutIntensity', 'uLutColorOffset', 'uLutToneOffset',
+      'uLogToRec709',
     ];
     for (const n of names) this.locs[n] = gl.getUniformLocation(prog, n);
     gl.uniform1i(this.locs.uImage, 0);
@@ -169,6 +170,11 @@ export class GradeRenderer {
   }
 
   setVideoFrame(video: HTMLVideoElement) {
+    this.setSourceFrame(video, video.videoWidth || this.imageSize.w, video.videoHeight || this.imageSize.h);
+  }
+
+  /** Upload any TexImageSource (video, canvas, bitmap) at known pixel size. */
+  setSourceFrame(source: TexImageSource, width: number, height: number) {
     if (!this.tex) this.tex = this.gl.createTexture();
     const gl = this.gl;
     gl.activeTexture(gl.TEXTURE0);
@@ -179,8 +185,8 @@ export class GradeRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
-    this.imageSize = { w: video.videoWidth || this.imageSize.w, h: video.videoHeight || this.imageSize.h };
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    this.imageSize = { w: width || this.imageSize.w, h: height || this.imageSize.h };
   }
 
   setBlendImage(bitmap: ImageBitmap | null) {
@@ -304,6 +310,7 @@ export class GradeRenderer {
     gl.uniform1f(L.uLutIntensity, p.lutIntensity);
     gl.uniform1f(L.uLutColorOffset, p.lutColorOffset);
     gl.uniform1f(L.uLutToneOffset, p.lutToneOffset);
+    gl.uniform1i(L.uLogToRec709, p.logToRec709 ? 1 : 0);
   }
 
   getCanvas(): HTMLCanvasElement {

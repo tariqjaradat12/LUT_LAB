@@ -263,7 +263,21 @@ export function PreviewStage({ rendererRef, exporting = false, exportingRef }: P
             title={pin.title}
           />
         ))}
-        {mediaKind === 'video' && <div className="color-badge">Rec.709</div>}
+        {mediaKind === 'video' && (
+          <button
+            type="button"
+            className={`color-badge${params.logToRec709 ? ' is-on' : ''}`}
+            aria-pressed={params.logToRec709}
+            title={
+              params.logToRec709
+                ? 'Log → Rec.709 is on (tap to turn off)'
+                : 'Tap to convert log footage to Rec.709'
+            }
+            onClick={() => patchParams({ logToRec709: !params.logToRec709 })}
+          >
+            Log → Rec.709
+          </button>
+        )}
       </div>
       {mediaKind === 'video' && videoEl && !exporting && (
         <VideoTransport video={videoEl} duration={videoDuration} />

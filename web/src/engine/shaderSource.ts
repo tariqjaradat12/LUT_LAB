@@ -87,6 +87,7 @@ uniform float uLutSize;
 uniform float uLutIntensity;
 uniform float uLutColorOffset;
 uniform float uLutToneOffset;
+uniform int uLogToRec709;
 
 vec3 sampleLut(vec3 c) {
   float N = uLutSize;
@@ -293,9 +294,43 @@ float linearMaskWeight(vec2 uv) {
   return along * cross;
 }
 
+float linearToRec709(float L) {
+  L = max(L, 0.0);
+  if (L < 0.018) return 4.5 * L;
+  return 1.099 * pow(L, 0.45) - 0.099;
+}
+
+// Generic camera-log decode (S-Log3-shaped) → scene-linear reflection.
+float slog3ToLinear(float x) {
+  x = clamp(x, 0.0, 1.0);
+  if (x >= 171.2102946929 / 1023.0) {
+    return (pow(10.0, (x * 1023.0 - 420.0) / 261.5) - 0.037584) * 0.9;
+  }
+  return (x * 1023.0 - 95.0) * 0.01125000 / (171.2102946929 - 95.0);
+}
+
+vec3 logToRec709(vec3 logRgb) {
+  vec3 lin = vec3(
+    slog3ToLinear(logRgb.r),
+    slog3ToLinear(logRgb.g),
+    slog3ToLinear(logRgb.b)
+  );
+  // Soft highlight rolloff so values > 1 still encode into Rec.709 display range.
+  lin = lin / (1.0 + lin * 0.35);
+  return vec3(
+    linearToRec709(lin.r),
+    linearToRec709(lin.g),
+    linearToRec709(lin.b)
+  );
+}
+
 void main() {
   vec2 uv = vUv;
   vec3 rgb = sampleImg(uv);
+
+  if (uLogToRec709 == 1) {
+    rgb = logToRec709(rgb);
+  }
 
   if (uHasLut == 1) {
     rgb = applyLutGrade(rgb);

@@ -169,11 +169,21 @@ function paintGradedFrame(
   w: number,
   h: number,
 ) {
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w;
-    canvas.height = h;
+  paintGradedFromSource(renderer, canvas, video, w, h);
+}
+
+function paintGradedFromSource(
+  renderer: GradeRenderer,
+  gradeCanvas: HTMLCanvasElement,
+  source: TexImageSource,
+  w: number,
+  h: number,
+) {
+  if (gradeCanvas.width !== w || gradeCanvas.height !== h) {
+    gradeCanvas.width = w;
+    gradeCanvas.height = h;
   }
-  renderer.setVideoFrame(video);
+  renderer.setSourceFrame(source, w, h);
   renderer.draw(false);
 }
 
@@ -192,7 +202,8 @@ async function canUseWebCodecsExport(width: number, height: number): Promise<boo
 }
 
 /**
- * Frame-accurate MP4 export via WebCodecs (correct 30fps timestamps + gallery-friendly first frame).
+ * Frame-accurate MP4 export via WebCodecs.
+ * Decodes with VideoSampleSink (not HTMLVideo seeks) so phones don't collapse to ~keyframe/5fps.
  */
 async function exportWithMediabunny(options: {
   video: HTMLVideoElement;
@@ -219,7 +230,13 @@ async function exportWithMediabunny(options: {
     Mp4OutputFormat,
     Output,
     Quality,
+    VideoSampleSink,
   } = await loadMediabunny();
+
+  if (!video.src) {
+    throw new Error('Video source is missing for export.');
+  }
+  const sourceBlob = await fetch(video.src).then((r) => r.blob());
 
   const videoCodec = await getFirstEncodableVideoCodec(['avc', 'hevc', 'vp9', 'av1'], {
     width: w,
@@ -227,6 +244,18 @@ async function exportWithMediabunny(options: {
   });
   if (!videoCodec) {
     throw new Error('No WebCodecs video encoder available.');
+  }
+
+  const input = new Input({
+    formats: ALL_FORMATS,
+    source: new BlobSource(sourceBlob),
+  });
+  const videoTrack = await input.getPrimaryVideoTrack();
+  if (!videoTrack) {
+    throw new Error('Could not read a video track for export.');
+  }
+  if (!(await videoTrack.canDecode())) {
+    throw new Error('This browser cannot decode the video track for export.');
   }
 
   const target = new BufferTarget();
@@ -242,64 +271,57 @@ async function exportWithMediabunny(options: {
   });
   output.addVideoTrack(videoSource);
 
-  // Best-effort: copy/re-encode original audio into the MP4.
   let audioSource: InstanceType<typeof AudioSampleSource> | null = null;
-  let sourceBlob: Blob | null = null;
   try {
-    if (video.src) {
-      sourceBlob = await fetch(video.src).then((r) => r.blob());
+    const audioCodec = await getFirstEncodableAudioCodec(['aac', 'opus', 'mp3']);
+    if (audioCodec) {
+      audioSource = new AudioSampleSource({
+        codec: audioCodec,
+        quality: new Quality({ bitrate: 256_000 }),
+      });
+      output.addAudioTrack(audioSource);
     }
   } catch {
-    sourceBlob = null;
-  }
-
-  if (sourceBlob) {
-    try {
-      const audioCodec = await getFirstEncodableAudioCodec(['aac', 'opus', 'mp3']);
-      if (audioCodec) {
-        audioSource = new AudioSampleSource({
-          codec: audioCodec,
-          quality: new Quality({ bitrate: 256_000 }),
-        });
-        output.addAudioTrack(audioSource);
-      }
-    } catch {
-      audioSource = null;
-    }
+    audioSource = null;
   }
 
   await output.start();
 
   const frameDt = 1 / EXPORT_FPS;
   const totalFrames = Math.max(1, Math.round(sourceDuration * EXPORT_FPS));
+  const sink = new VideoSampleSink(videoTrack);
+  const decodeCanvas = document.createElement('canvas');
+  decodeCanvas.width = w;
+  decodeCanvas.height = h;
+  const decodeCtx = decodeCanvas.getContext('2d', { alpha: false });
+  if (!decodeCtx) {
+    throw new Error('Could not allocate a decode canvas for export.');
+  }
 
-  // Ensure first encoded frame (gallery thumbnail) is a real graded picture, not black.
-  await seekVideo(video, 0);
-  await waitForDecodedFrame(video);
-  paintGradedFrame(video, renderer, canvas, w, h);
-  await videoSource.add(0, frameDt);
-  onProgress?.(0);
-
-  for (let i = 1; i < totalFrames; i++) {
-    const t = Math.min(sourceDuration - 1e-4, i * frameDt);
-    await seekVideo(video, t);
-    await waitForDecodedFrame(video);
-    paintGradedFrame(video, renderer, canvas, w, h);
-    await videoSource.add(t, frameDt);
+  for (let i = 0; i < totalFrames; i++) {
+    const t = Math.min(Math.max(0, sourceDuration - 1e-4), i * frameDt);
+    const sample = await sink.getSample(t);
+    if (!sample) {
+      // Hold last graded frame if a timestamp has no sample.
+      await videoSource.add(i * frameDt, frameDt);
+      onProgress?.(t);
+      continue;
+    }
+    decodeCtx.clearRect(0, 0, w, h);
+    sample.draw(decodeCtx, 0, 0, w, h);
+    sample.close();
+    paintGradedFromSource(renderer, canvas, decodeCanvas, w, h);
+    await videoSource.add(i * frameDt, frameDt);
     onProgress?.(t);
   }
   videoSource.close();
 
-  if (audioSource && sourceBlob) {
+  if (audioSource) {
     try {
-      const input = new Input({
-        formats: ALL_FORMATS,
-        source: new BlobSource(sourceBlob),
-      });
       const audioTrack = await input.getPrimaryAudioTrack();
       if (audioTrack && (await audioTrack.canDecode())) {
-        const sink = new AudioSampleSink(audioTrack);
-        for await (const sample of sink.samples(0, sourceDuration)) {
+        const audioSink = new AudioSampleSink(audioTrack);
+        for await (const sample of audioSink.samples(0, sourceDuration)) {
           await audioSource.add(sample);
           sample.close();
         }
