@@ -171,8 +171,8 @@ export function ToolPanel({ exporting = false }: ToolPanelProps) {
             )}
             {filmSub === 'anamorphic' && (
               <>
-                <p className="hint">Drag the plus onto a bright subject or light. Horizontal streaks extend toward the frame edges.</p>
-                <Slider label="Intensity" value={params.longExposureAmount} min={0} max={100} onChange={(v) => setParam('longExposureAmount', v)} format={pct} />
+                <p className="hint">Drag the plus onto your subject. Adds tiny light streaks around it — sparkle texture, not grain.</p>
+                <Slider label="Amount" value={params.longExposureAmount} min={0} max={100} onChange={(v) => setParam('longExposureAmount', v)} format={pct} />
                 <Slider label="Angle" value={params.longExposureDirection} min={-180} max={180} onChange={(v) => setParam('longExposureDirection', v)} format={(v) => `${Math.round(v)}°`} />
               </>
             )}

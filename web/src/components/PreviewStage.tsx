@@ -45,7 +45,7 @@ export function PreviewStage({ rendererRef, exporting = false, exportingRef }: P
       id: 'anamorphic',
       x: params.longExposureCenter.x,
       y: params.longExposureCenter.y,
-      title: 'Anamorphic source',
+      title: 'Streak focus',
       onMove: (x, y) => patchParams({ longExposureCenter: { x, y } }),
     });
   }

@@ -270,63 +270,63 @@ vec3 blendDx(vec3 base, vec3 over, int mode) {
   return max(base, over);
 }
 
-// Anamorphic streaks: cool horizontal flares from the pin toward frame edges (Project Hail Mary style).
+// Tiny light streaks — grain-scale sparkle around the pin, not film grain.
 vec3 applyAnamorphicStreaks(vec2 uv, vec3 rgb) {
   if (uLongAmt <= 0.1) return rgb;
 
   float str = uLongAmt / 100.0;
   float ang = uLongDir * 0.0174533;
-  vec2 dir = vec2(cos(ang), sin(ang));
-  vec2 perp = vec2(-dir.y, dir.x);
+  vec2 streakDir = vec2(cos(ang), sin(ang));
+  vec2 perpDir = vec2(-streakDir.y, streakDir.x);
 
-  vec2 delta = uv - uLongCenter;
-  float perpDist = abs(dot(delta, perp));
-  float along = dot(delta, dir);
+  // Streaks gather around the subject you pin — still faint elsewhere.
+  float zone = mix(0.18, 1.0, 1.0 - smoothstep(0.04, 0.55, distance(uv, uLongCenter)));
 
-  // Brightness at the pin — drag onto a subject, lamp, or highlight.
-  float emitter = 0.0;
-  vec3 source = vec3(0.0);
-  for (int j = 0; j < 5; j++) {
-    float a = float(j) * 1.256637;
-    vec2 p = clamp(uLongCenter + vec2(cos(a), sin(a)) * 0.012, 0.0, 1.0);
-    vec3 s = sampleImg(p);
-    source += s;
-    float sl = dot(s, vec3(0.2126, 0.7152, 0.0722));
-    emitter = max(emitter, smoothstep(0.1, 0.7, sl));
+  vec2 px = uv * uResolution;
+  float cellSize = mix(16.0, 7.0, str);
+  vec2 cell = floor(px / cellSize);
+
+  vec3 streakAdd = vec3(0.0);
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 cid = cell + vec2(float(i), float(j));
+      float h0 = hash(cid);
+      float h1 = hash(cid + 13.7);
+      float h2 = hash(cid + 41.3);
+
+      // Sparse — only some cells get a micro streak.
+      if (h0 < 0.48 - str * 0.32) continue;
+
+      vec2 center = (cid + vec2(h1, h2)) * cellSize;
+      vec2 d = px - center;
+      float along = dot(d, streakDir);
+      float perp = abs(dot(d, perpDir));
+
+      float lenPx = (3.0 + h0 * 11.0) * (0.55 + str * 0.65);
+      float widthPx = 0.3 + h1 * 0.75;
+
+      float alongMask = 1.0 - smoothstep(lenPx * 0.5, lenPx * 0.5 + 1.0, abs(along));
+      float perpMask = 1.0 - smoothstep(0.0, widthPx, perp);
+      float particle = alongMask * perpMask;
+      if (particle < 0.004) continue;
+
+      vec2 localUv = clamp(center / uResolution, 0.0, 1.0);
+      vec3 local = sampleImg(localUv);
+      float localL = dot(local, vec3(0.2126, 0.7152, 0.0722));
+
+      vec3 warm = vec3(1.0, 0.93, 0.8);
+      vec3 cool = vec3(0.76, 0.88, 1.0);
+      vec3 tint = mix(warm, cool, h2);
+      vec3 col = mix(tint, local * 1.3 + 0.06, 0.5);
+
+      float sparkle = particle * (0.2 + h0 * 0.8) * (0.3 + localL * 0.9);
+      streakAdd += col * sparkle;
+    }
   }
-  source /= 5.0;
-  if (emitter < 0.01) return rgb;
-
-  // Streak line through the pin (perpendicular falloff).
-  float core = 1.0 - smoothstep(0.0005, 0.016, perpDist);
-  float glow = 1.0 - smoothstep(0.003, 0.07, perpDist);
-
-  // Smear highlights along the streak axis out toward both edges.
-  vec3 smear = vec3(0.0);
-  float wSum = 0.0;
-  for (int i = -28; i <= 28; i++) {
-    if (i == 0) continue;
-    float t = float(i) / 28.0 * 0.58;
-    vec2 sp = clamp(uLongCenter + dir * t, 0.0, 1.0);
-    vec3 s = sampleImg(sp);
-    float sl = dot(s, vec3(0.2126, 0.7152, 0.0722));
-    float hi = smoothstep(0.22, 0.88, sl);
-    float w = hi * (1.0 - 0.28 * abs(t));
-    smear += s * w;
-    wSum += w;
-  }
-  smear /= max(wSum, 0.001);
-
-  // Cool blue body with a warm core at the source (typical anamorphic flare).
-  float nearSource = exp(-abs(along) * 7.0);
-  vec3 coolStreak = vec3(0.32, 0.58, 1.0);
-  vec3 streakCol = mix(coolStreak, source * 1.35, clamp(nearSource, 0.0, 1.0));
-  vec3 streak = mix(smear, streakCol, 0.5) * glow * emitter * str;
 
   float pixL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-  float receive = 1.0 - smoothstep(0.45, 0.96, pixL);
-  rgb += streak * (0.55 + receive * 1.05);
-  rgb += coolStreak * core * emitter * str * 0.42;
+  float lift = mix(0.5, 1.0, pixL);
+  rgb += streakAdd * str * zone * lift * 0.6;
   return clamp(rgb, 0.0, 1.0);
 }
 
