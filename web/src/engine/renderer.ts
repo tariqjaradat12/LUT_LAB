@@ -168,6 +168,21 @@ export class GradeRenderer {
     this.render();
   }
 
+  setVideoFrame(video: HTMLVideoElement) {
+    if (!this.tex) this.tex = this.gl.createTexture();
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+    this.imageSize = { w: video.videoWidth || this.imageSize.w, h: video.videoHeight || this.imageSize.h };
+  }
+
   setBlendImage(bitmap: ImageBitmap | null) {
     if (!bitmap) {
       this.hasBlend = false;
