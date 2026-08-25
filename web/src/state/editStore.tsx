@@ -12,6 +12,9 @@ import { type ImportedLut, importCubeContent } from '../engine/lutEngine';
 import { buildAllFilmPresets } from '../engine/filmSimulations';
 import { loadImageFromFile } from '../lib/imageIO';
 import { cloneDefaultParams } from '../lib/params';
+import { loadVideoFromFile, revokeVideoUrl } from '../lib/videoIO';
+
+type MediaKind = 'image' | 'video' | null;
 
 type Store = {
   params: EditParams;
@@ -20,11 +23,21 @@ type Store = {
   resetParams: () => void;
   imageBitmap: ImageBitmap | null;
   blendBitmap: ImageBitmap | null;
+  mediaKind: MediaKind;
+  hasMedia: boolean;
   hasImage: boolean;
+  videoEl: HTMLVideoElement | null;
+  videoObjectUrl: string | null;
+  videoDuration: number;
+  videoWidth: number;
+  videoHeight: number;
+  colorSpace: 'rec709';
   error: string | null;
   setError: (msg: string | null) => void;
+  openMedia: (file: File) => Promise<void>;
   openImage: (file: File) => Promise<void>;
   openBlendImage: (file: File) => Promise<void>;
+  clearVideo: () => void;
   clearBlend: () => void;
   section: ToolSection;
   setSection: (s: ToolSection) => void;
@@ -66,6 +79,33 @@ export function EditProvider({ children }: { children: ReactNode }) {
   const [presetsLoading, setPresetsLoading] = useState(true);
   const [importedLuts, setImportedLuts] = useState<ImportedLut[]>([]);
   const [activeLutId, setActiveLutId] = useState<string | null>(null);
+  const [mediaKind, setMediaKind] = useState<MediaKind>(null);
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+  const [videoObjectUrl, setVideoObjectUrl] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoWidth, setVideoWidth] = useState(0);
+  const [videoHeight, setVideoHeight] = useState(0);
+
+  const clearVideo = useCallback(() => {
+    setVideoEl((prev) => {
+      prev?.pause();
+      return null;
+    });
+    setVideoObjectUrl((prev) => {
+      revokeVideoUrl(prev);
+      return null;
+    });
+    setVideoDuration(0);
+    setVideoWidth(0);
+    setVideoHeight(0);
+    setMediaKind((prev) => (prev === 'video' ? null : prev));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      revokeVideoUrl(videoObjectUrl);
+    };
+  }, [videoObjectUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,21 +165,47 @@ export function EditProvider({ children }: { children: ReactNode }) {
     clearLut();
   }, [clearBlend, clearLut]);
 
-  const openImage = useCallback(async (file: File) => {
+  const openMedia = useCallback(async (file: File) => {
+    let pendingVideoUrl: string | null = null;
     try {
-      const bmp = await loadImageFromFile(file);
+      clearVideo();
       setImageBitmap((prev) => {
         prev?.close();
-        return bmp;
+        return null;
       });
+      setMediaKind(null);
       setParams(cloneDefaultParams());
       clearBlend();
       clearLut();
+
+      const isVideo =
+        file.type.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/i.test(file.name);
+
+      if (isVideo) {
+        const loaded = await loadVideoFromFile(file);
+        pendingVideoUrl = loaded.objectUrl;
+        setVideoEl(loaded.video);
+        setVideoObjectUrl(loaded.objectUrl);
+        setVideoDuration(loaded.duration);
+        setVideoWidth(loaded.width);
+        setVideoHeight(loaded.height);
+        setMediaKind('video');
+        pendingVideoUrl = null;
+      } else {
+        const bmp = await loadImageFromFile(file);
+        setImageBitmap(bmp);
+        setMediaKind('image');
+      }
       setError(null);
     } catch (e) {
+      revokeVideoUrl(pendingVideoUrl);
       setError(e instanceof Error ? e.message : 'Could not open that file.');
     }
-  }, [clearBlend, clearLut]);
+  }, [clearBlend, clearLut, clearVideo]);
+
+  const openImage = useCallback(async (file: File) => {
+    await openMedia(file);
+  }, [openMedia]);
 
   const openBlendImage = useCallback(async (file: File) => {
     try {
@@ -200,6 +266,9 @@ export function EditProvider({ children }: { children: ReactNode }) {
     if (activeLutId === id) clearLut();
   }, [activeLutId, clearLut]);
 
+  const hasImage = !!imageBitmap;
+  const hasMedia = hasImage || mediaKind === 'video';
+
   const value = useMemo(
     () => ({
       params,
@@ -208,11 +277,21 @@ export function EditProvider({ children }: { children: ReactNode }) {
       resetParams,
       imageBitmap,
       blendBitmap,
-      hasImage: !!imageBitmap,
+      mediaKind,
+      hasMedia,
+      hasImage,
+      videoEl,
+      videoObjectUrl,
+      videoDuration,
+      videoWidth,
+      videoHeight,
+      colorSpace: 'rec709' as const,
       error,
       setError,
+      openMedia,
       openImage,
       openBlendImage,
+      clearVideo,
       clearBlend,
       section,
       setSection,
@@ -229,9 +308,10 @@ export function EditProvider({ children }: { children: ReactNode }) {
     }),
     [
       params, setParam, patchParams, resetParams, imageBitmap, blendBitmap,
-      error, openImage, openBlendImage, clearBlend, section, filmSub,
-      presetLuts, presetsLoading, importedLuts, activeLutId, activeLutData,
-      importLutFile, selectLut, removeLut,
+      mediaKind, hasMedia, hasImage, videoEl, videoObjectUrl, videoDuration,
+      videoWidth, videoHeight, error, openMedia, openImage, openBlendImage,
+      clearVideo, clearBlend, section, filmSub, presetLuts, presetsLoading,
+      importedLuts, activeLutId, activeLutData, importLutFile, selectLut, removeLut,
     ],
   );
 
