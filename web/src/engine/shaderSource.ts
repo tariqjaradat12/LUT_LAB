@@ -232,6 +232,38 @@ vec3 gaussianSoft(vec2 uv, float radiusPx) {
   return acc / wSum;
 }
 
+// Dreamy soft focus: blur luminance (keeps grade intact) + fine grain so it isn't blocky.
+vec3 applySoftness(vec2 uv, vec3 rgb) {
+  if (uSoftness <= 0.5) return rgb;
+
+  float amt = clamp(uSoftness / 100.0, 0.0, 0.92);
+  float minRes = min(uResolution.x, uResolution.y);
+  float radiusPx = max(uSoftness * minRes * 0.0048, 2.0);
+  vec2 pxStep = radiusPx / uResolution;
+
+  vec3 acc = vec3(0.0);
+  float wSum = 0.0;
+  for (int x = -5; x <= 5; x++) {
+    for (int y = -5; y <= 5; y++) {
+      float w = exp(-float(x * x + y * y) / 9.0);
+      acc += sampleImg(uv + vec2(float(x), float(y)) * pxStep) * w;
+      wSum += w;
+    }
+  }
+  vec3 blurred = acc / wSum;
+
+  float pixL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+  float blurL = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
+  float softL = mix(pixL, blurL, amt);
+  rgb = clamp(rgb * (softL / max(pixL, 0.001)), 0.0, 1.0);
+
+  vec2 gp = uv * uResolution * 0.48;
+  float n = softNoise(gp) * 0.65 + softNoise(gp * 2.3 + 1.7) * 0.35;
+  float grain = (n - 0.5) * amt * 0.07;
+  rgb += vec3(grain) * mix(0.35, 1.0, pixL);
+  return clamp(rgb, 0.0, 1.0);
+}
+
 vec3 edgeAwareDenoise(vec2 uv, vec3 center, float strength, int colorOnly) {
   if (strength <= 0.001) return center;
   vec2 px = 1.2 / uResolution;
@@ -270,63 +302,56 @@ vec3 blendDx(vec3 base, vec3 over, int mode) {
   return max(base, over);
 }
 
+// One micro-streak particle in a grid cell.
+vec3 microStreakAt(vec2 px, vec2 dirPx, vec2 perpPx, vec2 cellId, float cellSize, float str) {
+  float h0 = hash(cellId);
+  if (h0 >= 0.18 + str * 0.6) return vec3(0.0);
+
+  vec2 center = (cellId + vec2(hash(cellId + 1.7), hash(cellId + 9.2))) * cellSize;
+  vec2 d = px - center;
+  float along = abs(dot(d, dirPx));
+  float perp = abs(dot(d, perpPx));
+  float lenPx = (2.5 + h0 * 10.0) * (0.55 + str * 0.55);
+  float widthPx = 0.45 + hash(cellId + 3.3) * 1.0;
+  float particle = (1.0 - smoothstep(lenPx * 0.5, lenPx * 0.5 + 1.0, along))
+                 * (1.0 - smoothstep(0.0, widthPx, perp));
+  if (particle < 0.003) return vec3(0.0);
+
+  vec3 warm = vec3(1.0, 0.94, 0.82);
+  vec3 cool = vec3(0.7, 0.85, 1.0);
+  vec3 tint = mix(warm, cool, hash(cellId + 5.1));
+  return tint * particle * (0.35 + h0 * 0.65);
+}
+
 // Tiny light streaks — grain-scale sparkle around the pin, not film grain.
 vec3 applyAnamorphicStreaks(vec2 uv, vec3 rgb) {
   if (uLongAmt <= 0.1) return rgb;
 
   float str = uLongAmt / 100.0;
   float ang = uLongDir * 0.0174533;
-  vec2 streakDir = vec2(cos(ang), sin(ang));
-  vec2 perpDir = vec2(-streakDir.y, streakDir.x);
+  vec2 dirPx = normalize(vec2(cos(ang) * uResolution.x, sin(ang) * uResolution.y));
+  vec2 perpPx = vec2(-dirPx.y, dirPx.x);
 
-  // Streaks gather around the subject you pin — still faint elsewhere.
-  float zone = mix(0.18, 1.0, 1.0 - smoothstep(0.04, 0.55, distance(uv, uLongCenter)));
+  float zone = exp(-pow(distance(uv, uLongCenter) / 0.38, 2.0));
+  zone = mix(0.28, 1.0, zone);
 
   vec2 px = uv * uResolution;
-  float cellSize = mix(16.0, 7.0, str);
-  vec2 cell = floor(px / cellSize);
+  float pixL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+  float lift = mix(0.5, 1.0, pixL);
 
   vec3 streakAdd = vec3(0.0);
-  for (int j = -1; j <= 1; j++) {
-    for (int i = -1; i <= 1; i++) {
-      vec2 cid = cell + vec2(float(i), float(j));
-      float h0 = hash(cid);
-      float h1 = hash(cid + 13.7);
-      float h2 = hash(cid + 41.3);
-
-      // Sparse — only some cells get a micro streak.
-      if (h0 < 0.48 - str * 0.32) continue;
-
-      vec2 center = (cid + vec2(h1, h2)) * cellSize;
-      vec2 d = px - center;
-      float along = dot(d, streakDir);
-      float perp = abs(dot(d, perpDir));
-
-      float lenPx = (3.0 + h0 * 11.0) * (0.55 + str * 0.65);
-      float widthPx = 0.3 + h1 * 0.75;
-
-      float alongMask = 1.0 - smoothstep(lenPx * 0.5, lenPx * 0.5 + 1.0, abs(along));
-      float perpMask = 1.0 - smoothstep(0.0, widthPx, perp);
-      float particle = alongMask * perpMask;
-      if (particle < 0.004) continue;
-
-      vec2 localUv = clamp(center / uResolution, 0.0, 1.0);
-      vec3 local = sampleImg(localUv);
-      float localL = dot(local, vec3(0.2126, 0.7152, 0.0722));
-
-      vec3 warm = vec3(1.0, 0.93, 0.8);
-      vec3 cool = vec3(0.76, 0.88, 1.0);
-      vec3 tint = mix(warm, cool, h2);
-      vec3 col = mix(tint, local * 1.3 + 0.06, 0.5);
-
-      float sparkle = particle * (0.2 + h0 * 0.8) * (0.3 + localL * 0.9);
-      streakAdd += col * sparkle;
+  for (int layer = 0; layer < 3; layer++) {
+    float cellSize = layer == 0 ? 9.0 : (layer == 1 ? 15.0 : 24.0);
+    vec2 cell = floor(px / cellSize);
+    for (int j = -1; j <= 1; j++) {
+      for (int i = -1; i <= 1; i++) {
+        vec2 cid = cell + vec2(float(i), float(j));
+        streakAdd += microStreakAt(px, dirPx, perpPx, cid, cellSize, str);
+      }
     }
   }
 
-  float pixL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-  float lift = mix(0.5, 1.0, pixL);
-  rgb += streakAdd * str * zone * lift * 0.6;
+  rgb += streakAdd * str * zone * lift * 0.95;
   return clamp(rgb, 0.0, 1.0);
 }
 
@@ -464,11 +489,9 @@ void main() {
     rgb += (rgb - near) * (uSharpen / 50.0);
   }
 
-  // Softness — smooth gaussian on graded result
+  // Softness — dreamy luma blur + fine grain (not blocky RGB mix)
   if (uSoftness > 0.5) {
-    float radius = uSoftness * 0.35;
-    vec3 soft = gaussianSoft(uv, radius);
-    rgb = mix(rgb, soft, clamp(uSoftness / 100.0, 0.0, 0.95));
+    rgb = applySoftness(uv, rgb);
   }
 
   // Edge-aware denoise (not plain blur)
