@@ -306,12 +306,16 @@ export class GradeRenderer {
     gl.uniform1f(L.uLutToneOffset, p.lutToneOffset);
   }
 
+  getCanvas(): HTMLCanvasElement {
+    return this.canvas;
+  }
+
   render() {
     this.draw(true);
   }
 
   /** Draw current grade. When fitToStage is false, keep the current canvas buffer size (export). */
-  private draw(fitToStage: boolean) {
+  draw(fitToStage: boolean) {
     const gl = this.gl;
     if (!this.tex || !this.params) return;
     if (fitToStage) this.resize();

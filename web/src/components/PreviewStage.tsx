@@ -5,6 +5,10 @@ import { VideoTransport } from './VideoTransport';
 
 type Props = {
   rendererRef: MutableRefObject<GradeRenderer | null>;
+  /** When true, skip preview frame loop / relayout so export can drive native-size draws. */
+  exporting?: boolean;
+  /** Sync guard — set true before await so the loop cannot race the React state update. */
+  exportingRef?: MutableRefObject<boolean>;
 };
 
 type PinDef = {
@@ -15,7 +19,7 @@ type PinDef = {
   onMove: (x: number, y: number) => void;
 };
 
-export function PreviewStage({ rendererRef }: Props) {
+export function PreviewStage({ rendererRef, exporting = false, exportingRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLElement>(null);
   const {
@@ -125,11 +129,12 @@ export function PreviewStage({ rendererRef }: Props) {
   }, [activeLutData, rendererRef]);
 
   useEffect(() => {
+    if (exporting || exportingRef?.current) return;
     rendererRef.current?.setParams(params);
-  }, [params, rendererRef]);
+  }, [params, rendererRef, exporting, exportingRef]);
 
   useEffect(() => {
-    if (mediaKind !== 'video' || !videoEl) return;
+    if (exporting || mediaKind !== 'video' || !videoEl) return;
 
     let cancelled = false;
     let rafId = 0;
@@ -138,7 +143,7 @@ export function PreviewStage({ rendererRef }: Props) {
     const useRvfc = typeof video.requestVideoFrameCallback === 'function';
 
     const drawFrame = () => {
-      if (cancelled || document.hidden) return;
+      if (cancelled || document.hidden || exportingRef?.current) return;
       const r = rendererRef.current;
       if (!r) return;
       if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
@@ -186,13 +191,17 @@ export function PreviewStage({ rendererRef }: Props) {
       }
       cancelAnimationFrame(rafId);
     };
-  }, [mediaKind, videoEl, rendererRef]);
+  }, [exporting, mediaKind, videoEl, rendererRef, exportingRef]);
 
   useEffect(() => {
+    if (exporting) return;
     const stage = stageRef.current;
     if (!stage) return;
 
-    const relayout = () => rendererRef.current?.render();
+    const relayout = () => {
+      if (exportingRef?.current) return;
+      rendererRef.current?.render();
+    };
     const ro = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(relayout)
       : null;
@@ -208,7 +217,7 @@ export function PreviewStage({ rendererRef }: Props) {
       window.visualViewport?.removeEventListener('resize', relayout);
       window.visualViewport?.removeEventListener('scroll', relayout);
     };
-  }, [rendererRef]);
+  }, [exporting, rendererRef, exportingRef]);
 
   const onPinPointer = (pin: PinDef) => (e: ReactPointerEvent<HTMLDivElement>) => {
     const frame = e.currentTarget.parentElement;
