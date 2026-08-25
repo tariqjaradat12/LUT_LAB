@@ -61,8 +61,15 @@ export function downloadBlob(blob: Blob, filename: string) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  // Append before click — required for reliable downloads on mobile Chrome.
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  // Do not revoke immediately: phones often truncate the file if the blob URL
+  // is revoked before the download pipeline has finished reading it.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export function downloadCanvas(

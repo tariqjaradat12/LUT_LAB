@@ -14,16 +14,31 @@ export function formatTimecode(seconds: number): string {
 
 export function pickRecorderMimeType(): string | null {
   if (typeof MediaRecorder === 'undefined') return null;
+  // Prefer MP4/H.264 when available — phone galleries often show WebM as 0:00
+  // and may refuse to play it. Fall back to WebM on browsers that only support it.
   const candidates = [
+    'video/mp4;codecs=avc1.640028,mp4a.40.2',
+    'video/mp4;codecs=avc1.4D401F,mp4a.40.2',
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4',
     'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
     'video/webm',
-    'video/mp4',
   ];
   for (const t of candidates) {
     if (MediaRecorder.isTypeSupported(t)) return t;
   }
   return null;
+}
+
+/** Target encode bitrate from frame size (≈0.12 bpp @ 30fps, clamped). */
+export function suggestVideoBitrate(width: number, height: number, fps = 30): number {
+  const w = Math.max(1, width | 0);
+  const h = Math.max(1, height | 0);
+  const rate = Math.round(w * h * Math.max(1, fps) * 0.12);
+  return Math.min(40_000_000, Math.max(8_000_000, rate));
 }
 
 export function revokeVideoUrl(url: string | null | undefined) {

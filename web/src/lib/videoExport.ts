@@ -1,6 +1,7 @@
+import fixWebmDuration from 'fix-webm-duration';
 import type { GradeRenderer } from '../engine/renderer';
 import type { EditParams } from '../engine/types';
-import { canExportDuration, pickRecorderMimeType } from './videoIO';
+import { canExportDuration, pickRecorderMimeType, suggestVideoBitrate } from './videoIO';
 
 export type ExportGradedVideoArgs = {
   video: HTMLVideoElement;
@@ -99,9 +100,23 @@ function tryAddAudioTracks(video: HTMLVideoElement, stream: MediaStream) {
   }
 }
 
+function fixWebmBlobDuration(blob: Blob, durationSec: number): Promise<Blob> {
+  if (!blob.type.includes('webm') || !Number.isFinite(durationSec) || durationSec <= 0) {
+    return Promise.resolve(blob);
+  }
+  const durationMs = durationSec * 1000;
+  return new Promise((resolve) => {
+    try {
+      fixWebmDuration(blob, durationMs, (fixed) => resolve(fixed), { logger: false });
+    } catch {
+      resolve(blob);
+    }
+  });
+}
+
 /**
  * Record the graded WebGL canvas at native video resolution.
- * Never downscales (no scale factor &lt; 1). Prefer WebM via MediaRecorder.
+ * Never downscales (no scale factor &lt; 1). Prefer MP4 when MediaRecorder supports it.
  */
 export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise<Blob> {
   const { video, renderer, params, onProgress } = options;
@@ -130,10 +145,16 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
   const resumeTime = video.currentTime;
   const wasMuted = video.muted;
   const wasLoop = video.loop;
+  const sourceDuration = video.duration;
 
   renderer.setParams(params);
   canvas.width = w;
   canvas.height = h;
+  if (canvas.width !== w || canvas.height !== h) {
+    throw new Error(`Could not allocate a ${w}×${h} export canvas on this device.`);
+  }
+
+  const videoBitsPerSecond = suggestVideoBitrate(w, h, 30);
 
   const { stream, requestFrame } = startCanvasCapture(canvas);
   tryAddAudioTracks(video, stream);
@@ -141,7 +162,8 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
   const chunks: BlobPart[] = [];
   const recorder = new MediaRecorder(stream, {
     mimeType: mime,
-    videoBitsPerSecond: 8_000_000,
+    videoBitsPerSecond,
+    audioBitsPerSecond: 192_000,
   });
 
   const blobPromise = new Promise<Blob>((resolve, reject) => {
@@ -162,6 +184,11 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
 
   const paint = () => {
     if (cancelled) return;
+    // Keep buffer locked at native size if anything else tries to resize mid-export.
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
     if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
       renderer.setVideoFrame(video);
       renderer.draw(false);
@@ -233,7 +260,9 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
     video.muted = true;
     await seekVideo(video, 0);
 
-    recorder.start(100);
+    // No timeslice: one complete blob on stop is more reliable for duration/metadata
+    // (especially MP4) than many tiny fragments.
+    recorder.start();
     startPump();
     await video.play();
     await waitForEnded(video);
@@ -242,7 +271,11 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
     if (recorder.state === 'recording' || recorder.state === 'paused') {
       recorder.stop();
     }
-    const blob = await blobPromise;
+    let blob = await blobPromise;
+    if (blob.size < 1024) {
+      throw new Error('Export produced an empty file. Try a shorter clip or another browser.');
+    }
+    blob = await fixWebmBlobDuration(blob, sourceDuration);
     return blob;
   } catch (err) {
     try {
