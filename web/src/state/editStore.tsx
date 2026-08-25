@@ -8,9 +8,9 @@ import {
   type ReactNode,
 } from 'react';
 import { type EditParams, type FilmSubTab, type ToolSection } from '../engine/types';
-import { type ImportedLut, importCubeContent, loadPresetLut } from '../engine/lutEngine';
+import { type ImportedLut, importCubeContent } from '../engine/lutEngine';
+import { buildAllFilmPresets } from '../engine/filmSimulations';
 import { loadImageFromFile } from '../lib/imageIO';
-import { BUILTIN_LUT_PRESETS, presetCubeUrl } from '../lib/lutPresets';
 import { cloneDefaultParams } from '../lib/params';
 
 type Store = {
@@ -69,24 +69,22 @@ export function EditProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    // Yield so first paint isn't blocked by 17×33³ LUT builds
+    const timer = window.setTimeout(() => {
       try {
-        const loaded = await Promise.all(
-          BUILTIN_LUT_PRESETS.map((p) =>
-            loadPresetLut(p.id, p.name, presetCubeUrl(p.file)),
-          ),
-        );
+        const loaded = buildAllFilmPresets();
         if (!cancelled) setPresetLuts(loaded);
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Could not load LUT presets.');
+          setError(e instanceof Error ? e.message : 'Could not build film presets.');
         }
       } finally {
         if (!cancelled) setPresetsLoading(false);
       }
-    })();
+    }, 0);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, []);
 

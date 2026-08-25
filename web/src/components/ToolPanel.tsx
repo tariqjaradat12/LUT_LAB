@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BLEND_MODES, HUE_BANDS, type FilmSubTab, type HueBand, type ToolSection } from '../engine/types';
-import { getLutDisplayName } from '../lib/lutPresets';
+import { FILM_PRESET_META, getLutDisplayName } from '../lib/lutPresets';
 import { useEditStore } from '../state/editStore';
 import { CurveEditor } from './CurveEditor';
 import { LutCustomizerPad } from './LutCustomizerPad';
@@ -252,25 +252,33 @@ export function ToolPanel() {
 
         {section === 'luts' && (
           <>
-            <p className="hint">Pick a preset or import your own .cube LUT, then drag the square to fine-tune color and tone.</p>
+            <p className="hint">
+              Camera-style film sims first, then fine-tune with the color/tone square and Mix.
+            </p>
 
-            <p className="section-label">Presets</p>
             {presetsLoading ? (
-              <p className="hint">Loading presets…</p>
+              <p className="hint">Building film presets…</p>
             ) : (
-              <div className="chip-row" style={{ marginBottom: '0.85rem' }}>
-                {presetLuts.map((lut) => (
-                  <button
-                    key={lut.id}
-                    type="button"
-                    className={`chip${activeLutId === lut.id ? ' active' : ''}`}
-                    onClick={() => selectLut(lut.id)}
-                    title={activeLutId === lut.id ? 'Tap again to disable' : 'Apply LUT'}
-                  >
-                    {lut.name}
-                  </button>
+              <>
+                {(['Fujifilm', 'Kodak'] as const).map((group) => (
+                  <div key={group}>
+                    <p className="section-label">{group}</p>
+                    <div className="chip-row" style={{ marginBottom: '0.85rem' }}>
+                      {FILM_PRESET_META.filter((p) => p.group === group).map((meta) => (
+                        <button
+                          key={meta.id}
+                          type="button"
+                          className={`chip${activeLutId === meta.id ? ' active' : ''}`}
+                          onClick={() => selectLut(meta.id)}
+                          title={activeLutId === meta.id ? 'Tap again to disable' : `Apply ${meta.name}`}
+                        >
+                          {meta.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
-              </div>
+              </>
             )}
 
             <p className="section-label">Import</p>
@@ -342,8 +350,8 @@ export function ToolPanel() {
               </>
             )}
 
-            {!activeLutId && !presetsLoading && importedLuts.length === 0 && (
-              <p className="hint">Tap a preset above to start grading.</p>
+            {!activeLutId && !presetsLoading && (
+              <p className="hint">Tap a film sim above to start grading.</p>
             )}
           </>
         )}
