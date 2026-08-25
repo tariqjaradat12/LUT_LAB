@@ -14,7 +14,7 @@ export default function App() {
     try {
       if (!hasImage || !rendererRef.current) return;
       const canvas = rendererRef.current.exportToCanvas();
-      downloadCanvas(canvas, 'lut-lab-export.png');
+      downloadCanvas(canvas, 'lut-lab-export.jpg');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Export failed.');
     }

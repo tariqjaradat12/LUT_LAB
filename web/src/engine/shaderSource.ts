@@ -27,6 +27,7 @@ uniform float uTemperature;
 uniform float uTint;
 uniform float uHue;
 uniform int uBw;
+uniform int uColorGrade; // 1 = apply hue/sat/vib/hsl path
 
 uniform float uCurveW[5];
 uniform float uCurveR[5];
@@ -331,14 +332,16 @@ void main() {
   rgb.b -= uTemperature / 200.0;
   rgb.g += uTint / 250.0;
 
-  vec3 hsv = rgb2hsv(clamp(rgb, 0.0, 1.0));
-  hsv.x = fract(hsv.x + uHue / 360.0);
-  float satMul = 1.0 + uSaturation / 100.0;
-  float vib = uVibrance / 100.0;
-  hsv.y = clamp(hsv.y * satMul + vib * (1.0 - hsv.y) * hsv.y, 0.0, 1.0);
-  rgb = hsv2rgb(hsv);
-
-  rgb = applyHslBands(rgb);
+  // Skip HSV round-trips when color tools are at defaults (keeps import looking identical).
+  if (uColorGrade == 1) {
+    vec3 hsv = rgb2hsv(clamp(rgb, 0.0, 1.0));
+    hsv.x = fract(hsv.x + uHue / 360.0);
+    float satMul = 1.0 + uSaturation / 100.0;
+    float vib = uVibrance / 100.0;
+    hsv.y = clamp(hsv.y * satMul + vib * (1.0 - hsv.y) * hsv.y, 0.0, 1.0);
+    rgb = hsv2rgb(hsv);
+    rgb = applyHslBands(rgb);
+  }
 
   if (uBw == 1) {
     float g = dot(rgb, vec3(0.299, 0.587, 0.114));

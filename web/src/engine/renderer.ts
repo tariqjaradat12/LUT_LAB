@@ -40,6 +40,19 @@ function curvesAreIdentity(curves: CurveChannels) {
   );
 }
 
+function colorGradeActive(p: EditParams) {
+  if (Math.abs(p.saturation) > 0.01 || Math.abs(p.vibrance) > 0.01 || Math.abs(p.hue) > 0.01) {
+    return true;
+  }
+  for (const band of HUE_BANDS) {
+    const b = p.hsl[band];
+    if (Math.abs(b.hue) > 0.01 || Math.abs(b.saturation) > 0.01 || Math.abs(b.luminance) > 0.01) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export class GradeRenderer {
   private gl: WebGLRenderingContext;
   private program: WebGLProgram;
@@ -81,7 +94,7 @@ export class GradeRenderer {
     const names = [
       'uImage', 'uBlend', 'uHasBlend', 'uResolution',
       'uExposure', 'uBrightness', 'uContrast', 'uHighlights', 'uShadows',
-      'uSaturation', 'uVibrance', 'uTemperature', 'uTint', 'uHue', 'uBw',
+      'uSaturation', 'uVibrance', 'uTemperature', 'uTint', 'uHue', 'uBw', 'uColorGrade',
       'uCurveW', 'uCurveR', 'uCurveG', 'uCurveB', 'uCurvesEnabled',
       'uHslH', 'uHslS', 'uHslL',
       'uSharpen', 'uDefinition', 'uSoftness', 'uDenoiseL', 'uDenoiseC',
@@ -134,7 +147,11 @@ export class GradeRenderer {
 
   private upload(target: WebGLTexture, bitmap: ImageBitmap) {
     const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, target);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
+    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.BROWSER_DEFAULT_WEBGL);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -215,6 +232,7 @@ export class GradeRenderer {
     gl.uniform1f(L.uTint, p.tint);
     gl.uniform1f(L.uHue, p.hue);
     gl.uniform1i(L.uBw, p.bwEnabled ? 1 : 0);
+    gl.uniform1i(L.uColorGrade, colorGradeActive(p) ? 1 : 0);
     gl.uniform1fv(L.uCurveW, curveYs(p.curves.rgb));
     gl.uniform1fv(L.uCurveR, curveYs(p.curves.r));
     gl.uniform1fv(L.uCurveG, curveYs(p.curves.g));
@@ -274,9 +292,14 @@ export class GradeRenderer {
   }
 
   render() {
+    this.draw(true);
+  }
+
+  /** Draw current grade. When fitToStage is false, keep the current canvas buffer size (export). */
+  private draw(fitToStage: boolean) {
     const gl = this.gl;
     if (!this.tex || !this.params) return;
-    this.resize();
+    if (fitToStage) this.resize();
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.clear(this.gl.COLOR_BUFFER_BIT);
     gl.useProgram(this.program);
@@ -300,14 +323,18 @@ export class GradeRenderer {
     off.height = h;
     const prevW = this.canvas.width;
     const prevH = this.canvas.height;
+    const prevStyleW = this.canvas.style.width;
+    const prevStyleH = this.canvas.style.height;
     this.canvas.width = w;
     this.canvas.height = h;
-    this.render();
-    const ctx = off.getContext('2d')!;
+    this.draw(false);
+    const ctx = off.getContext('2d', { colorSpace: 'srgb' })!;
     ctx.drawImage(this.canvas, 0, 0, w, h);
     this.canvas.width = prevW;
     this.canvas.height = prevH;
-    this.render();
+    this.canvas.style.width = prevStyleW;
+    this.canvas.style.height = prevStyleH;
+    this.draw(true);
     return off;
   }
 
