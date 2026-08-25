@@ -29,10 +29,7 @@ uniform float uHue;
 uniform int uBw;
 uniform int uColorGrade; // 1 = apply hue/sat/vib/hsl path
 
-uniform float uCurveW[5];
-uniform float uCurveR[5];
-uniform float uCurveG[5];
-uniform float uCurveB[5];
+uniform sampler2D uCurveAtlas;
 uniform int uCurvesEnabled;
 
 uniform float uHslH[8];
@@ -183,17 +180,12 @@ vec3 applyLutGrade(vec3 src) {
   return mix(src, clamp(target, 0.0, 1.0), t);
 }
 
-float evalCurve(float x, float y0, float y1, float y2, float y3, float y4) {
-  float t = clamp(x, 0.0, 1.0) * 4.0;
-  float i = floor(t);
-  float f = t - i;
-  if (i >= 3.5) return clamp(y4, 0.0, 1.0);
-  float a = i < 0.5 ? y0 : (i < 1.5 ? y1 : (i < 2.5 ? y2 : y3));
-  float b = i < 0.5 ? y1 : (i < 1.5 ? y2 : (i < 2.5 ? y3 : y4));
-  // Cosine ease — smoother than raw linear, without smoothstep’s flat shoulders
-  // that posterize when points are pushed to the extremes.
-  float u = 0.5 - 0.5 * cos(clamp(f, 0.0, 1.0) * 3.14159265);
-  return clamp(mix(a, b, u), 0.0, 1.0);
+float sampleCurve(float row, float x) {
+  // Atlas rows: 0=white/master, 1=R, 2=G, 3=B. Size 256×4.
+  // Sample texel centers so LINEAR filtering matches the baked LUT.
+  float u = (clamp(x, 0.0, 1.0) * 255.0 + 0.5) / 256.0;
+  float v = (row + 0.5) / 4.0;
+  return texture2D(uCurveAtlas, vec2(u, v)).r;
 }
 
 float bandWeight(float h, float center) {
@@ -405,19 +397,11 @@ void main() {
   }
 
   if (uCurvesEnabled == 1) {
-    // Master (white) curve remaps luminance so hue/ratios stay intact.
-    // Applying it per-channel (old behavior) splits colors and looks like artifacting.
-    float luma = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-    float mapped = evalCurve(luma, uCurveW[0], uCurveW[1], uCurveW[2], uCurveW[3], uCurveW[4]);
-    if (luma > 1e-5) {
-      rgb *= mapped / luma;
-    } else {
-      rgb = vec3(mapped);
-    }
-    rgb.r = evalCurve(clamp(rgb.r, 0.0, 1.0), uCurveR[0], uCurveR[1], uCurveR[2], uCurveR[3], uCurveR[4]);
-    rgb.g = evalCurve(clamp(rgb.g, 0.0, 1.0), uCurveG[0], uCurveG[1], uCurveG[2], uCurveG[3], uCurveG[4]);
-    rgb.b = evalCurve(clamp(rgb.b, 0.0, 1.0), uCurveB[0], uCurveB[1], uCurveB[2], uCurveB[3], uCurveB[4]);
-    rgb = clamp(rgb, 0.0, 1.0);
+    // High-res LUT tone curve. Master applies the same map to R/G/B (standard RGB curves).
+    vec3 c = clamp(rgb, 0.0, 1.0);
+    c = vec3(sampleCurve(0.0, c.r), sampleCurve(0.0, c.g), sampleCurve(0.0, c.b));
+    c = vec3(sampleCurve(1.0, c.r), sampleCurve(2.0, c.g), sampleCurve(3.0, c.b));
+    rgb = clamp(c, 0.0, 1.0);
   }
 
   if (abs(uDefinition) > 0.1) {

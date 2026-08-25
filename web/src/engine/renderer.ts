@@ -1,6 +1,7 @@
 import { BLEND_MODE_INDEX, HUE_BANDS, type CurveChannels, type CurvePoint, type EditParams } from './types';
 import { FRAG, VERT } from './shaderSource';
 import { hexToRgb } from '../lib/imageIO';
+import { bakeCurveAtlas } from '../lib/curveMath';
 import { lutDataToTextureBytes } from './lutEngine';
 
 function compile(gl: WebGLRenderingContext, type: number, src: string) {
@@ -15,17 +16,8 @@ function compile(gl: WebGLRenderingContext, type: number, src: string) {
   return s;
 }
 
-function curveYs(points: { y: number }[]) {
-  return new Float32Array([
-    points[0]?.y ?? 0,
-    points[1]?.y ?? 0.25,
-    points[2]?.y ?? 0.5,
-    points[3]?.y ?? 0.75,
-    points[4]?.y ?? 1,
-  ]);
-}
-
 const IDENTITY_Y = [0, 0.25, 0.5, 0.75, 1];
+const CURVE_LUT_SIZE = 256;
 
 function channelIsIdentity(points: CurvePoint[]) {
   return points.length >= 5 && points.every((p, i) => Math.abs(p.y - IDENTITY_Y[i]) < 0.002);
@@ -60,12 +52,14 @@ export class GradeRenderer {
   private tex: WebGLTexture | null = null;
   private blendTex: WebGLTexture | null = null;
   private lutTex: WebGLTexture | null = null;
+  private curveTex: WebGLTexture | null = null;
   private hasBlend = false;
   private hasLut = false;
   private lutSize = 33;
   private params: EditParams | null = null;
   private imageSize = { w: 1, h: 1 };
   private locs: Record<string, WebGLUniformLocation | null> = {};
+  private lastCurveKey = '';
 
   constructor(private canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl', { preserveDrawingBuffer: true, alpha: false });
@@ -95,7 +89,7 @@ export class GradeRenderer {
       'uImage', 'uBlend', 'uHasBlend', 'uResolution',
       'uExposure', 'uBrightness', 'uContrast', 'uHighlights', 'uShadows',
       'uSaturation', 'uVibrance', 'uTemperature', 'uTint', 'uHue', 'uBw', 'uColorGrade',
-      'uCurveW', 'uCurveR', 'uCurveG', 'uCurveB', 'uCurvesEnabled',
+      'uCurveAtlas', 'uCurvesEnabled',
       'uHslH', 'uHslS', 'uHslL',
       'uSharpen', 'uDefinition', 'uSoftness', 'uDenoiseL', 'uDenoiseC',
       'uVigStrength', 'uVigRadius', 'uVigSoft',
@@ -113,7 +107,57 @@ export class GradeRenderer {
     gl.uniform1i(this.locs.uImage, 0);
     gl.uniform1i(this.locs.uBlend, 1);
     gl.uniform1i(this.locs.uLut, 2);
+    gl.uniform1i(this.locs.uCurveAtlas, 3);
     gl.clearColor(0, 0, 0, 1);
+
+    this.curveTex = gl.createTexture();
+    this.uploadIdentityCurves();
+  }
+
+  private uploadIdentityCurves() {
+    const identity = {
+      rgb: IDENTITY_Y.map((y, i) => ({ x: i / 4, y })),
+      r: IDENTITY_Y.map((y, i) => ({ x: i / 4, y })),
+      g: IDENTITY_Y.map((y, i) => ({ x: i / 4, y })),
+      b: IDENTITY_Y.map((y, i) => ({ x: i / 4, y })),
+    };
+    this.uploadCurveAtlas(identity);
+  }
+
+  private uploadCurveAtlas(curves: CurveChannels) {
+    const gl = this.gl;
+    if (!this.curveTex) this.curveTex = gl.createTexture();
+    const data = bakeCurveAtlas(curves, CURVE_LUT_SIZE);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.curveTex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      CURVE_LUT_SIZE,
+      4,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      data,
+    );
+  }
+
+  private syncCurveAtlas(curves: CurveChannels) {
+    const key = [
+      ...curves.rgb.map((p) => p.y.toFixed(4)),
+      ...curves.r.map((p) => p.y.toFixed(4)),
+      ...curves.g.map((p) => p.y.toFixed(4)),
+      ...curves.b.map((p) => p.y.toFixed(4)),
+    ].join(',');
+    if (key === this.lastCurveKey) return;
+    this.lastCurveKey = key;
+    this.uploadCurveAtlas(curves);
   }
 
   /** Fit canvas to stage while preserving photo aspect ratio. */
@@ -254,10 +298,7 @@ export class GradeRenderer {
     gl.uniform1f(L.uHue, p.hue);
     gl.uniform1i(L.uBw, p.bwEnabled ? 1 : 0);
     gl.uniform1i(L.uColorGrade, colorGradeActive(p) ? 1 : 0);
-    gl.uniform1fv(L.uCurveW, curveYs(p.curves.rgb));
-    gl.uniform1fv(L.uCurveR, curveYs(p.curves.r));
-    gl.uniform1fv(L.uCurveG, curveYs(p.curves.g));
-    gl.uniform1fv(L.uCurveB, curveYs(p.curves.b));
+    this.syncCurveAtlas(p.curves);
     gl.uniform1i(L.uCurvesEnabled, curvesAreIdentity(p.curves) ? 0 : 1);
     const hArr = new Float32Array(8);
     const sArr = new Float32Array(8);
@@ -341,6 +382,8 @@ export class GradeRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.hasBlend && this.blendTex ? this.blendTex : this.tex);
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, this.hasLut && this.lutTex ? this.lutTex : this.tex);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.curveTex);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
@@ -374,6 +417,7 @@ export class GradeRenderer {
     if (this.tex) gl.deleteTexture(this.tex);
     if (this.blendTex) gl.deleteTexture(this.blendTex);
     if (this.lutTex) gl.deleteTexture(this.lutTex);
+    if (this.curveTex) gl.deleteTexture(this.curveTex);
     gl.deleteBuffer(this.buf);
     gl.deleteProgram(this.program);
   }
