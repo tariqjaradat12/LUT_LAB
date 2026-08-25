@@ -165,7 +165,7 @@ export function ToolPanel({ exporting = false }: ToolPanelProps) {
             )}
             {filmSub === 'halation' && (
               <>
-                <p className="hint">Drag the plus on the image to aim the glow.</p>
+                <p className="hint">Drag the plus onto a bright highlight (sun, lamp, sky). Raise strength and radius to spread the glow.</p>
                 <Slider label="Strength" value={params.halationStrength} min={0} max={100} onChange={(v) => setParam('halationStrength', v)} format={pct} />
                 <Slider label="Radius" value={params.halationRadius} min={0.05} max={0.8} step={0.01} onChange={(v) => setParam('halationRadius', v)} format={(v) => v.toFixed(2)} />
                 <div className="row">
