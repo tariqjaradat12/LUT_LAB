@@ -270,6 +270,66 @@ vec3 blendDx(vec3 base, vec3 over, int mode) {
   return max(base, over);
 }
 
+// Anamorphic streaks: cool horizontal flares from the pin toward frame edges (Project Hail Mary style).
+vec3 applyAnamorphicStreaks(vec2 uv, vec3 rgb) {
+  if (uLongAmt <= 0.1) return rgb;
+
+  float str = uLongAmt / 100.0;
+  float ang = uLongDir * 0.0174533;
+  vec2 dir = vec2(cos(ang), sin(ang));
+  vec2 perp = vec2(-dir.y, dir.x);
+
+  vec2 delta = uv - uLongCenter;
+  float perpDist = abs(dot(delta, perp));
+  float along = dot(delta, dir);
+
+  // Brightness at the pin — drag onto a subject, lamp, or highlight.
+  float emitter = 0.0;
+  vec3 source = vec3(0.0);
+  for (int j = 0; j < 5; j++) {
+    float a = float(j) * 1.256637;
+    vec2 p = clamp(uLongCenter + vec2(cos(a), sin(a)) * 0.012, 0.0, 1.0);
+    vec3 s = sampleImg(p);
+    source += s;
+    float sl = dot(s, vec3(0.2126, 0.7152, 0.0722));
+    emitter = max(emitter, smoothstep(0.1, 0.7, sl));
+  }
+  source /= 5.0;
+  if (emitter < 0.01) return rgb;
+
+  // Streak line through the pin (perpendicular falloff).
+  float core = 1.0 - smoothstep(0.0005, 0.016, perpDist);
+  float glow = 1.0 - smoothstep(0.003, 0.07, perpDist);
+
+  // Smear highlights along the streak axis out toward both edges.
+  vec3 smear = vec3(0.0);
+  float wSum = 0.0;
+  for (int i = -28; i <= 28; i++) {
+    if (i == 0) continue;
+    float t = float(i) / 28.0 * 0.58;
+    vec2 sp = clamp(uLongCenter + dir * t, 0.0, 1.0);
+    vec3 s = sampleImg(sp);
+    float sl = dot(s, vec3(0.2126, 0.7152, 0.0722));
+    float hi = smoothstep(0.22, 0.88, sl);
+    float w = hi * (1.0 - 0.28 * abs(t));
+    smear += s * w;
+    wSum += w;
+  }
+  smear /= max(wSum, 0.001);
+
+  // Cool blue body with a warm core at the source (typical anamorphic flare).
+  float nearSource = exp(-abs(along) * 7.0);
+  vec3 coolStreak = vec3(0.32, 0.58, 1.0);
+  vec3 streakCol = mix(coolStreak, source * 1.35, clamp(nearSource, 0.0, 1.0));
+  vec3 streak = mix(smear, streakCol, 0.5) * glow * emitter * str;
+
+  float pixL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+  float receive = 1.0 - smoothstep(0.45, 0.96, pixL);
+  rgb += streak * (0.55 + receive * 1.05);
+  rgb += coolStreak * core * emitter * str * 0.42;
+  return clamp(rgb, 0.0, 1.0);
+}
+
 float linearMaskWeight(vec2 uv) {
   vec2 ab = uLinEnd - uLinStart;
   float len2 = dot(ab, ab);
@@ -342,23 +402,6 @@ void main() {
 
   if (uHasLut == 1) {
     rgb = applyLutGrade(rgb);
-  }
-
-  // Anamorphic streaks
-  if (uLongAmt > 0.5) {
-    float ang = uLongDir * 0.0174533;
-    vec2 dir = vec2(cos(ang), sin(ang));
-    float dist = distance(uv, uLongCenter);
-    float w = smoothstep(0.0, 0.55, dist) * (uLongAmt / 100.0);
-    vec3 acc = rgb;
-    float total = 1.0;
-    for (int i = 1; i <= 8; i++) {
-      float t = float(i) / 8.0;
-      vec2 off = dir * t * 0.08 * w;
-      acc += sampleImg(uv + off) + sampleImg(uv - off);
-      total += 2.0;
-    }
-    rgb = mix(rgb, acc / total, clamp(w, 0.0, 1.0));
   }
 
   rgb *= pow(2.0, uExposure);
@@ -462,6 +505,10 @@ void main() {
       vec3 blurred = gaussianSoft(uv, radius);
       rgb = mix(rgb, blurred, clamp(blurAmt, 0.0, 1.0));
     }
+  }
+
+  if (uLongAmt > 0.1) {
+    rgb = applyAnamorphicStreaks(uv, rgb);
   }
 
   if (uVigStrength > 0.1) {
