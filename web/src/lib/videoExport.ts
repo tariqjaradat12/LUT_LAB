@@ -5,6 +5,7 @@ import {
   canExportDuration,
   chooseExportVideoBitrate,
   estimateSourceBitrate,
+  EXPORT_FPS,
   pickRecorderMimeType,
 } from './videoIO';
 
@@ -17,31 +18,15 @@ export type ExportGradedVideoArgs = {
   onProgress?: (t: number) => void;
 };
 
-type CaptureHandle = {
-  stream: MediaStream;
-  requestFrame: (() => void) | null;
-};
-
-function startCanvasCapture(canvas: HTMLCanvasElement): CaptureHandle {
+function startCanvasCapture(canvas: HTMLCanvasElement): MediaStream {
   const captureStream = (
     canvas as HTMLCanvasElement & { captureStream?: (frameRate?: number) => MediaStream }
   ).captureStream;
   if (typeof captureStream !== 'function') {
     throw new Error('This browser cannot capture canvas video for export.');
   }
-
-  try {
-    const stream = captureStream.call(canvas, 0);
-    const track = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void };
-    if (typeof track?.requestFrame === 'function') {
-      return { stream, requestFrame: () => track.requestFrame!() };
-    }
-    for (const t of stream.getTracks()) t.stop();
-  } catch {
-    // Fall through to fixed-FPS capture.
-  }
-
-  return { stream: captureStream.call(canvas, 30), requestFrame: null };
+  // Fixed FPS — do not use captureStream(0)+requestFrame (that follows display refresh, often 60).
+  return captureStream.call(canvas, EXPORT_FPS);
 }
 
 function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
@@ -181,10 +166,10 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
     width: w,
     height: h,
     sourceBitrate,
-    fps: 30,
+    fps: EXPORT_FPS,
   });
 
-  const { stream, requestFrame } = startCanvasCapture(canvas);
+  const stream = startCanvasCapture(canvas);
   assertNativeCaptureSize(stream, w, h);
   tryAddAudioTracks(video, stream);
 
@@ -221,7 +206,6 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
     if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
       renderer.setVideoFrame(video);
       renderer.draw(false);
-      requestFrame?.();
     }
     onProgress?.(video.currentTime);
   };

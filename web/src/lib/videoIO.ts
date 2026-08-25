@@ -1,5 +1,8 @@
 export const MAX_EXPORT_DURATION_SEC = 15 * 60;
 
+/** Graded exports are always encoded at this frame rate. */
+export const EXPORT_FPS = 30;
+
 export function canExportDuration(durationSec: number): boolean {
   if (!Number.isFinite(durationSec) || durationSec <= 0) return false;
   return durationSec <= MAX_EXPORT_DURATION_SEC + 0.05;

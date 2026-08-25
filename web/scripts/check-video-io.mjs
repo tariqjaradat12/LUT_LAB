@@ -1,4 +1,5 @@
 const MAX_EXPORT_DURATION_SEC = 15 * 60;
+const EXPORT_FPS = 30;
 
 function canExportDuration(durationSec) {
   if (!Number.isFinite(durationSec) || durationSec <= 0) return false;
@@ -37,6 +38,7 @@ function assert(condition, message) {
   }
 }
 
+assert(EXPORT_FPS === 30, 'exports are locked to 30fps');
 assert(canExportDuration(899) === true, 'canExportDuration(899) should be true');
 assert(canExportDuration(900) === true, 'canExportDuration(900) should be true');
 assert(canExportDuration(901) === false, 'canExportDuration(901) should be false');
