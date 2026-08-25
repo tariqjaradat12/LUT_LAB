@@ -18,15 +18,34 @@ export type ExportGradedVideoArgs = {
   onProgress?: (t: number) => void;
 };
 
-function startCanvasCapture(canvas: HTMLCanvasElement): MediaStream {
+type CaptureHandle = {
+  stream: MediaStream;
+  /** Present when using manual frame push (preferred — synced to video time). */
+  requestFrame: (() => void) | null;
+};
+
+function startCanvasCapture(canvas: HTMLCanvasElement): CaptureHandle {
   const captureStream = (
     canvas as HTMLCanvasElement & { captureStream?: (frameRate?: number) => MediaStream }
   ).captureStream;
   if (typeof captureStream !== 'function') {
     throw new Error('This browser cannot capture canvas video for export.');
   }
-  // Fixed FPS — do not use captureStream(0)+requestFrame (that follows display refresh, often 60).
-  return captureStream.call(canvas, EXPORT_FPS);
+
+  // Prefer manual frames: emit exactly once per EXPORT_FPS slot of video.currentTime.
+  // captureStream(30) alone samples on wall-clock and duplicates frames when draw lags → sluggish motion.
+  try {
+    const stream = captureStream.call(canvas, 0);
+    const track = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void };
+    if (typeof track?.requestFrame === 'function') {
+      return { stream, requestFrame: () => track.requestFrame!() };
+    }
+    for (const t of stream.getTracks()) t.stop();
+  } catch {
+    // Fall through.
+  }
+
+  return { stream: captureStream.call(canvas, EXPORT_FPS), requestFrame: null };
 }
 
 function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
@@ -124,6 +143,7 @@ function assertNativeCaptureSize(stream: MediaStream, w: number, h: number) {
 /**
  * Record the graded WebGL canvas at native video resolution and source bitrate.
  * Never downscales. Prefer MP4 when MediaRecorder supports it.
+ * Motion is locked to EXPORT_FPS using video-time frame slots (not display refresh).
  */
 export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise<Blob> {
   const { video, renderer, params, sourceByteSize, onProgress } = options;
@@ -152,6 +172,7 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
   const resumeTime = video.currentTime;
   const wasMuted = video.muted;
   const wasLoop = video.loop;
+  const wasRate = video.playbackRate;
   const sourceDuration = video.duration;
 
   renderer.setParams(params);
@@ -169,7 +190,7 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
     fps: EXPORT_FPS,
   });
 
-  const stream = startCanvasCapture(canvas);
+  const { stream, requestFrame } = startCanvasCapture(canvas);
   assertNativeCaptureSize(stream, w, h);
   tryAddAudioTracks(video, stream);
 
@@ -194,19 +215,29 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
   let cancelled = false;
   let rafId = 0;
   let rvfcId: number | null = null;
+  let lastEmittedFrame = -1;
   const useRvfc = typeof video.requestVideoFrameCallback === 'function';
+  const manualFrames = typeof requestFrame === 'function';
 
-  const paint = () => {
+  const paint = (force = false) => {
     if (cancelled) return;
     // Keep buffer locked at native size if anything else tries to resize mid-export.
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
     }
-    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      renderer.setVideoFrame(video);
-      renderer.draw(false);
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+
+    if (manualFrames) {
+      // One encoded frame per 1/EXPORT_FPS second of media time — keeps motion crisp at 30fps.
+      const frameIndex = Math.floor(video.currentTime * EXPORT_FPS + 1e-6);
+      if (!force && frameIndex <= lastEmittedFrame) return;
+      lastEmittedFrame = force ? Math.max(lastEmittedFrame, frameIndex) : frameIndex;
     }
+
+    renderer.setVideoFrame(video);
+    renderer.draw(false);
+    requestFrame?.();
     onProgress?.(video.currentTime);
   };
 
@@ -223,14 +254,14 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
     if (useRvfc) {
       const tick = () => {
         if (cancelled) return;
-        paint();
+        paint(false);
         rvfcId = video.requestVideoFrameCallback(tick);
       };
       rvfcId = video.requestVideoFrameCallback(tick);
     } else {
       const tick = () => {
         if (cancelled) return;
-        paint();
+        paint(false);
         rafId = requestAnimationFrame(tick);
       };
       rafId = requestAnimationFrame(tick);
@@ -241,6 +272,7 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
     stopPump();
     video.loop = wasLoop;
     video.muted = wasMuted;
+    video.playbackRate = wasRate;
     try {
       video.pause();
     } catch {
@@ -269,6 +301,7 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
 
   try {
     video.loop = false;
+    video.playbackRate = 1;
     // Keep muted for reliable play(); audio may still come from captureStream when available.
     video.muted = true;
     await seekVideo(video, 0);
@@ -281,7 +314,7 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
     startPump();
     await video.play();
     await waitForEnded(video);
-    paint();
+    paint(true);
 
     if (recorder.state === 'recording' || recorder.state === 'paused') {
       recorder.stop();
