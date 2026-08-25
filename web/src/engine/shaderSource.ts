@@ -232,35 +232,34 @@ vec3 gaussianSoft(vec2 uv, float radiusPx) {
   return acc / wSum;
 }
 
-// Dreamy soft focus: blur luminance (keeps grade intact) + fine grain so it isn't blocky.
+// Dreamy soft focus: remove detail while keeping grade brightness/color, plus fine grain.
 vec3 applySoftness(vec2 uv, vec3 rgb) {
   if (uSoftness <= 0.5) return rgb;
 
-  float amt = clamp(uSoftness / 100.0, 0.0, 0.92);
+  float amt = clamp(uSoftness / 100.0, 0.0, 0.9);
   float minRes = min(uResolution.x, uResolution.y);
-  float radiusPx = max(uSoftness * minRes * 0.0048, 2.0);
+  float radiusPx = max(uSoftness * minRes * 0.0035, 1.5);
   vec2 pxStep = radiusPx / uResolution;
 
   vec3 acc = vec3(0.0);
   float wSum = 0.0;
-  for (int x = -5; x <= 5; x++) {
-    for (int y = -5; y <= 5; y++) {
-      float w = exp(-float(x * x + y * y) / 9.0);
+  for (int x = -4; x <= 4; x++) {
+    for (int y = -4; y <= 4; y++) {
+      float w = exp(-float(x * x + y * y) / 12.0);
       acc += sampleImg(uv + vec2(float(x), float(y)) * pxStep) * w;
       wSum += w;
     }
   }
   vec3 blurred = acc / wSum;
+  // Apply blur to structure only; keep the graded color offset so exposure doesn't drop.
+  vec3 soft = blurred + (rgb - sampleImg(uv));
+  rgb = mix(rgb, soft, amt);
 
   float pixL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-  float blurL = dot(blurred, vec3(0.2126, 0.7152, 0.0722));
-  float softL = mix(pixL, blurL, amt);
-  rgb = clamp(rgb * (softL / max(pixL, 0.001)), 0.0, 1.0);
-
-  vec2 gp = uv * uResolution * 0.48;
-  float n = softNoise(gp) * 0.65 + softNoise(gp * 2.3 + 1.7) * 0.35;
-  float grain = (n - 0.5) * amt * 0.07;
-  rgb += vec3(grain) * mix(0.35, 1.0, pixL);
+  vec2 gp = uv * uResolution * 0.55;
+  float n = softNoise(gp) * 0.6 + softNoise(gp * 2.4 + 1.7) * 0.4;
+  float grain = (n - 0.5) * amt * 0.055;
+  rgb += vec3(grain) * mix(0.4, 1.0, pixL);
   return clamp(rgb, 0.0, 1.0);
 }
 
