@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "fix-webm-duration": "^1.0.6",
+    "mediabunny": "^1.55.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },

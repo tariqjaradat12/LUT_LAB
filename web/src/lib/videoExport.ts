@@ -20,32 +20,24 @@ export type ExportGradedVideoArgs = {
 
 type CaptureHandle = {
   stream: MediaStream;
-  /** Present when using manual frame push (preferred — synced to video time). */
   requestFrame: (() => void) | null;
 };
 
-function startCanvasCapture(canvas: HTMLCanvasElement): CaptureHandle {
-  const captureStream = (
-    canvas as HTMLCanvasElement & { captureStream?: (frameRate?: number) => MediaStream }
-  ).captureStream;
-  if (typeof captureStream !== 'function') {
-    throw new Error('This browser cannot capture canvas video for export.');
-  }
+type MediabunnyModule = typeof import('mediabunny');
 
-  // Prefer manual frames: emit exactly once per EXPORT_FPS slot of video.currentTime.
-  // captureStream(30) alone samples on wall-clock and duplicates frames when draw lags → sluggish motion.
-  try {
-    const stream = captureStream.call(canvas, 0);
-    const track = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void };
-    if (typeof track?.requestFrame === 'function') {
-      return { stream, requestFrame: () => track.requestFrame!() };
-    }
-    for (const t of stream.getTracks()) t.stop();
-  } catch {
-    // Fall through.
-  }
+let mediabunnyPromise: Promise<MediabunnyModule> | null = null;
 
-  return { stream: captureStream.call(canvas, EXPORT_FPS), requestFrame: null };
+function loadMediabunny(): Promise<MediabunnyModule> {
+  if (!mediabunnyPromise) {
+    mediabunnyPromise = import('mediabunny');
+  }
+  return mediabunnyPromise;
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
@@ -62,11 +54,35 @@ function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
       resolve();
       return;
     }
-    // Already at target / no seek fired.
     if (!video.seeking && Math.abs(video.currentTime - time) < 0.05) {
       video.removeEventListener('seeked', onSeeked);
       resolve();
     }
+  });
+}
+
+/** Wait until the element has a decoded frame we can sample. */
+function waitForDecodedFrame(video: HTMLVideoElement): Promise<void> {
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const onReady = () => {
+      cleanup();
+      resolve();
+    };
+    const onErr = () => {
+      cleanup();
+      reject(new Error('Video failed while preparing export frames.'));
+    };
+    const cleanup = () => {
+      video.removeEventListener('loadeddata', onReady);
+      video.removeEventListener('canplay', onReady);
+      video.removeEventListener('error', onErr);
+    };
+    video.addEventListener('loadeddata', onReady);
+    video.addEventListener('canplay', onReady);
+    video.addEventListener('error', onErr);
   });
 }
 
@@ -102,7 +118,6 @@ function tryAddAudioTracks(video: HTMLVideoElement, stream: MediaStream) {
     for (const track of src.getAudioTracks()) {
       stream.addTrack(track);
     }
-    // Only audio is needed; stop unused video tracks from the element capture.
     for (const track of src.getVideoTracks()) {
       track.stop();
     }
@@ -125,36 +140,329 @@ function fixWebmBlobDuration(blob: Blob, durationSec: number): Promise<Blob> {
   });
 }
 
-function assertNativeCaptureSize(stream: MediaStream, w: number, h: number) {
-  const track = stream.getVideoTracks()[0];
-  if (!track || typeof track.getSettings !== 'function') return;
-  const settings = track.getSettings();
-  const sw = settings.width;
-  const sh = settings.height;
-  if (!sw || !sh) return;
-  // Allow 1px rounding; anything else means the browser silently downscaled.
-  if (sw < w - 1 || sh < h - 1) {
-    throw new Error(
-      `This browser downscaled export to ${sw}×${sh} (source is ${w}×${h}). Try desktop Chrome/Edge, or a shorter/smaller clip.`,
-    );
+function startCanvasCapture(canvas: HTMLCanvasElement): CaptureHandle {
+  const captureStream = (
+    canvas as HTMLCanvasElement & { captureStream?: (frameRate?: number) => MediaStream }
+  ).captureStream;
+  if (typeof captureStream !== 'function') {
+    throw new Error('This browser cannot capture canvas video for export.');
+  }
+
+  try {
+    const stream = captureStream.call(canvas, 0);
+    const track = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void };
+    if (typeof track?.requestFrame === 'function') {
+      return { stream, requestFrame: () => track.requestFrame!() };
+    }
+    for (const t of stream.getTracks()) t.stop();
+  } catch {
+    // Fall through.
+  }
+
+  return { stream: captureStream.call(canvas, EXPORT_FPS), requestFrame: null };
+}
+
+function paintGradedFrame(
+  video: HTMLVideoElement,
+  renderer: GradeRenderer,
+  canvas: HTMLCanvasElement,
+  w: number,
+  h: number,
+) {
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+  renderer.setVideoFrame(video);
+  renderer.draw(false);
+}
+
+async function canUseWebCodecsExport(width: number, height: number): Promise<boolean> {
+  if (typeof VideoEncoder === 'undefined') return false;
+  try {
+    const { getFirstEncodableVideoCodec } = await loadMediabunny();
+    const codec = await getFirstEncodableVideoCodec(['avc', 'hevc', 'vp9', 'av1'], {
+      width,
+      height,
+    });
+    return codec != null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Frame-accurate MP4 export via WebCodecs (correct 30fps timestamps + gallery-friendly first frame).
+ */
+async function exportWithMediabunny(options: {
+  video: HTMLVideoElement;
+  renderer: GradeRenderer;
+  canvas: HTMLCanvasElement;
+  w: number;
+  h: number;
+  sourceDuration: number;
+  videoBitsPerSecond: number;
+  onProgress?: (t: number) => void;
+}): Promise<Blob> {
+  const { video, renderer, canvas, w, h, sourceDuration, videoBitsPerSecond, onProgress } = options;
+
+  const {
+    ALL_FORMATS,
+    AudioSampleSink,
+    AudioSampleSource,
+    BlobSource,
+    BufferTarget,
+    CanvasSource,
+    getFirstEncodableAudioCodec,
+    getFirstEncodableVideoCodec,
+    Input,
+    Mp4OutputFormat,
+    Output,
+    Quality,
+  } = await loadMediabunny();
+
+  const videoCodec = await getFirstEncodableVideoCodec(['avc', 'hevc', 'vp9', 'av1'], {
+    width: w,
+    height: h,
+  });
+  if (!videoCodec) {
+    throw new Error('No WebCodecs video encoder available.');
+  }
+
+  const target = new BufferTarget();
+  const output = new Output({
+    format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
+    target,
+  });
+
+  const videoSource = new CanvasSource(canvas, {
+    codec: videoCodec,
+    quality: new Quality({ bitrate: videoBitsPerSecond, bitrateMode: 'variable' }),
+    keyFrameInterval: 1,
+  });
+  output.addVideoTrack(videoSource);
+
+  // Best-effort: copy/re-encode original audio into the MP4.
+  let audioSource: InstanceType<typeof AudioSampleSource> | null = null;
+  let sourceBlob: Blob | null = null;
+  try {
+    if (video.src) {
+      sourceBlob = await fetch(video.src).then((r) => r.blob());
+    }
+  } catch {
+    sourceBlob = null;
+  }
+
+  if (sourceBlob) {
+    try {
+      const audioCodec = await getFirstEncodableAudioCodec(['aac', 'opus', 'mp3']);
+      if (audioCodec) {
+        audioSource = new AudioSampleSource({
+          codec: audioCodec,
+          quality: new Quality({ bitrate: 256_000 }),
+        });
+        output.addAudioTrack(audioSource);
+      }
+    } catch {
+      audioSource = null;
+    }
+  }
+
+  await output.start();
+
+  const frameDt = 1 / EXPORT_FPS;
+  const totalFrames = Math.max(1, Math.round(sourceDuration * EXPORT_FPS));
+
+  // Ensure first encoded frame (gallery thumbnail) is a real graded picture, not black.
+  await seekVideo(video, 0);
+  await waitForDecodedFrame(video);
+  paintGradedFrame(video, renderer, canvas, w, h);
+  await videoSource.add(0, frameDt);
+  onProgress?.(0);
+
+  for (let i = 1; i < totalFrames; i++) {
+    const t = Math.min(sourceDuration - 1e-4, i * frameDt);
+    await seekVideo(video, t);
+    await waitForDecodedFrame(video);
+    paintGradedFrame(video, renderer, canvas, w, h);
+    await videoSource.add(t, frameDt);
+    onProgress?.(t);
+  }
+  videoSource.close();
+
+  if (audioSource && sourceBlob) {
+    try {
+      const input = new Input({
+        formats: ALL_FORMATS,
+        source: new BlobSource(sourceBlob),
+      });
+      const audioTrack = await input.getPrimaryAudioTrack();
+      if (audioTrack && (await audioTrack.canDecode())) {
+        const sink = new AudioSampleSink(audioTrack);
+        for await (const sample of sink.samples(0, sourceDuration)) {
+          await audioSource.add(sample);
+          sample.close();
+        }
+      }
+    } catch {
+      // Keep video-only MP4 if audio copy fails.
+    }
+    audioSource.close();
+  }
+
+  await output.finalize();
+  const buffer = target.buffer;
+  if (!buffer || buffer.byteLength < 1024) {
+    throw new Error('Export produced an empty file.');
+  }
+  return new Blob([buffer], { type: 'video/mp4' });
+}
+
+/**
+ * Legacy MediaRecorder path — primes a real first frame so gallery thumbs are not black.
+ */
+async function exportWithMediaRecorder(options: {
+  video: HTMLVideoElement;
+  renderer: GradeRenderer;
+  canvas: HTMLCanvasElement;
+  w: number;
+  h: number;
+  params: EditParams;
+  sourceDuration: number;
+  videoBitsPerSecond: number;
+  onProgress?: (t: number) => void;
+}): Promise<Blob> {
+  const {
+    video,
+    renderer,
+    canvas,
+    w,
+    h,
+    sourceDuration,
+    videoBitsPerSecond,
+    onProgress,
+  } = options;
+
+  const mime = pickRecorderMimeType();
+  if (!mime) {
+    throw new Error('This browser cannot record video (MediaRecorder unsupported).');
+  }
+
+  // Prime a graded frame BEFORE capture starts — avoids black gallery thumbnails.
+  await seekVideo(video, 0);
+  await waitForDecodedFrame(video);
+  paintGradedFrame(video, renderer, canvas, w, h);
+
+  const { stream, requestFrame } = startCanvasCapture(canvas);
+  tryAddAudioTracks(video, stream);
+
+  const chunks: BlobPart[] = [];
+  const recorder = new MediaRecorder(stream, {
+    mimeType: mime,
+    videoBitsPerSecond,
+    audioBitsPerSecond: 256_000,
+  });
+
+  const blobPromise = new Promise<Blob>((resolve, reject) => {
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
+    recorder.onerror = () => reject(new Error('Recording failed.'));
+    recorder.onstop = () => {
+      const type = mime.includes('mp4') ? 'video/mp4' : 'video/webm';
+      resolve(new Blob(chunks, { type }));
+    };
+  });
+
+  let cancelled = false;
+  let rafId = 0;
+  let rvfcId: number | null = null;
+  let lastEmittedFrame = -1;
+  const useRvfc = typeof video.requestVideoFrameCallback === 'function';
+  const manualFrames = typeof requestFrame === 'function';
+
+  const paint = (force = false) => {
+    if (cancelled) return;
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+    if (manualFrames) {
+      const frameIndex = Math.floor(video.currentTime * EXPORT_FPS + 1e-6);
+      if (!force && frameIndex <= lastEmittedFrame) return;
+      lastEmittedFrame = force ? Math.max(lastEmittedFrame, frameIndex) : frameIndex;
+    }
+    paintGradedFrame(video, renderer, canvas, w, h);
+    requestFrame?.();
+    onProgress?.(video.currentTime);
+  };
+
+  const stopPump = () => {
+    cancelled = true;
+    if (rvfcId != null && typeof video.cancelVideoFrameCallback === 'function') {
+      video.cancelVideoFrameCallback(rvfcId);
+      rvfcId = null;
+    }
+    cancelAnimationFrame(rafId);
+  };
+
+  try {
+    video.loop = false;
+    video.playbackRate = 1;
+    video.muted = true;
+
+    recorder.start();
+    // Push the already-drawn graded frame as the first encoded frame (thumbnail).
+    requestFrame?.();
+    await sleep(Math.ceil(1000 / EXPORT_FPS));
+
+    if (useRvfc) {
+      const tick = () => {
+        if (cancelled) return;
+        paint(false);
+        rvfcId = video.requestVideoFrameCallback(tick);
+      };
+      rvfcId = video.requestVideoFrameCallback(tick);
+    } else {
+      const tick = () => {
+        if (cancelled) return;
+        paint(false);
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+    }
+
+    await video.play();
+    await waitForEnded(video);
+    paint(true);
+
+    if (recorder.state === 'recording' || recorder.state === 'paused') {
+      recorder.stop();
+    }
+    let blob = await blobPromise;
+    if (blob.size < 1024) {
+      throw new Error('Export produced an empty file. Try a shorter clip or another browser.');
+    }
+    blob = await fixWebmBlobDuration(blob, sourceDuration);
+    return blob;
+  } finally {
+    stopPump();
+    for (const t of stream.getTracks()) {
+      try {
+        t.stop();
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
 
 /**
  * Record the graded WebGL canvas at native video resolution and source bitrate.
- * Never downscales. Prefer MP4 when MediaRecorder supports it.
- * Motion is locked to EXPORT_FPS using video-time frame slots (not display refresh).
+ * Prefers WebCodecs/MP4 (true 30fps + non-black gallery thumb). Falls back to MediaRecorder.
  */
 export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise<Blob> {
   const { video, renderer, params, sourceByteSize, onProgress } = options;
 
   if (!canExportDuration(video.duration)) {
     throw new Error('Export is limited to 15 minutes.');
-  }
-
-  const mime = pickRecorderMimeType();
-  if (!mime) {
-    throw new Error('This browser cannot record video (MediaRecorder unsupported).');
   }
 
   const w = video.videoWidth;
@@ -190,86 +498,7 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
     fps: EXPORT_FPS,
   });
 
-  const { stream, requestFrame } = startCanvasCapture(canvas);
-  assertNativeCaptureSize(stream, w, h);
-  tryAddAudioTracks(video, stream);
-
-  const chunks: BlobPart[] = [];
-  const recorder = new MediaRecorder(stream, {
-    mimeType: mime,
-    videoBitsPerSecond,
-    audioBitsPerSecond: 256_000,
-  });
-
-  const blobPromise = new Promise<Blob>((resolve, reject) => {
-    recorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) chunks.push(e.data);
-    };
-    recorder.onerror = () => reject(new Error('Recording failed.'));
-    recorder.onstop = () => {
-      const type = mime.includes('mp4') ? 'video/mp4' : 'video/webm';
-      resolve(new Blob(chunks, { type }));
-    };
-  });
-
-  let cancelled = false;
-  let rafId = 0;
-  let rvfcId: number | null = null;
-  let lastEmittedFrame = -1;
-  const useRvfc = typeof video.requestVideoFrameCallback === 'function';
-  const manualFrames = typeof requestFrame === 'function';
-
-  const paint = (force = false) => {
-    if (cancelled) return;
-    // Keep buffer locked at native size if anything else tries to resize mid-export.
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
-    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
-
-    if (manualFrames) {
-      // One encoded frame per 1/EXPORT_FPS second of media time — keeps motion crisp at 30fps.
-      const frameIndex = Math.floor(video.currentTime * EXPORT_FPS + 1e-6);
-      if (!force && frameIndex <= lastEmittedFrame) return;
-      lastEmittedFrame = force ? Math.max(lastEmittedFrame, frameIndex) : frameIndex;
-    }
-
-    renderer.setVideoFrame(video);
-    renderer.draw(false);
-    requestFrame?.();
-    onProgress?.(video.currentTime);
-  };
-
-  const stopPump = () => {
-    cancelled = true;
-    if (rvfcId != null && typeof video.cancelVideoFrameCallback === 'function') {
-      video.cancelVideoFrameCallback(rvfcId);
-      rvfcId = null;
-    }
-    cancelAnimationFrame(rafId);
-  };
-
-  const startPump = () => {
-    if (useRvfc) {
-      const tick = () => {
-        if (cancelled) return;
-        paint(false);
-        rvfcId = video.requestVideoFrameCallback(tick);
-      };
-      rvfcId = video.requestVideoFrameCallback(tick);
-    } else {
-      const tick = () => {
-        if (cancelled) return;
-        paint(false);
-        rafId = requestAnimationFrame(tick);
-      };
-      rafId = requestAnimationFrame(tick);
-    }
-  };
-
   const restore = async () => {
-    stopPump();
     video.loop = wasLoop;
     video.muted = wasMuted;
     video.playbackRate = wasRate;
@@ -294,52 +523,41 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
       try {
         await video.play();
       } catch {
-        /* ignore autoplay blocks after export */
+        /* ignore */
       }
     }
   };
 
   try {
-    video.loop = false;
-    video.playbackRate = 1;
-    // Keep muted for reliable play(); audio may still come from captureStream when available.
-    video.muted = true;
-    await seekVideo(video, 0);
-
-    // No timeslice: one complete blob on stop is more reliable for duration/metadata
-    // (especially MP4) than many tiny fragments.
-    recorder.start();
-    // Some engines only populate track settings after recording begins.
-    assertNativeCaptureSize(stream, w, h);
-    startPump();
-    await video.play();
-    await waitForEnded(video);
-    paint(true);
-
-    if (recorder.state === 'recording' || recorder.state === 'paused') {
-      recorder.stop();
-    }
-    let blob = await blobPromise;
-    if (blob.size < 1024) {
-      throw new Error('Export produced an empty file. Try a shorter clip or another browser.');
-    }
-    blob = await fixWebmBlobDuration(blob, sourceDuration);
-    return blob;
-  } catch (err) {
-    try {
-      if (recorder.state === 'recording' || recorder.state === 'paused') recorder.stop();
-    } catch {
-      /* ignore */
-    }
-    throw err;
-  } finally {
-    for (const t of stream.getTracks()) {
+    if (await canUseWebCodecsExport(w, h)) {
       try {
-        t.stop();
+        return await exportWithMediabunny({
+          video,
+          renderer,
+          canvas,
+          w,
+          h,
+          sourceDuration,
+          videoBitsPerSecond,
+          onProgress,
+        });
       } catch {
-        /* ignore */
+        // Fall through to MediaRecorder.
       }
     }
+
+    return await exportWithMediaRecorder({
+      video,
+      renderer,
+      canvas,
+      w,
+      h,
+      params,
+      sourceDuration,
+      videoBitsPerSecond,
+      onProgress,
+    });
+  } finally {
     await restore();
   }
 }
