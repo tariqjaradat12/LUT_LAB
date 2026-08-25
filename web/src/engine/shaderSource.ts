@@ -187,11 +187,13 @@ float evalCurve(float x, float y0, float y1, float y2, float y3, float y4) {
   float t = clamp(x, 0.0, 1.0) * 4.0;
   float i = floor(t);
   float f = t - i;
-  float a = i < 0.5 ? y0 : (i < 1.5 ? y1 : (i < 2.5 ? y2 : (i < 3.5 ? y3 : y4)));
+  if (i >= 3.5) return clamp(y4, 0.0, 1.0);
+  float a = i < 0.5 ? y0 : (i < 1.5 ? y1 : (i < 2.5 ? y2 : y3));
   float b = i < 0.5 ? y1 : (i < 1.5 ? y2 : (i < 2.5 ? y3 : y4));
-  if (i >= 3.5) return y4;
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(a, b, f);
+  // Cosine ease — smoother than raw linear, without smoothstep’s flat shoulders
+  // that posterize when points are pushed to the extremes.
+  float u = 0.5 - 0.5 * cos(clamp(f, 0.0, 1.0) * 3.14159265);
+  return clamp(mix(a, b, u), 0.0, 1.0);
 }
 
 float bandWeight(float h, float center) {
@@ -403,13 +405,19 @@ void main() {
   }
 
   if (uCurvesEnabled == 1) {
-    float wr = evalCurve(rgb.r, uCurveW[0], uCurveW[1], uCurveW[2], uCurveW[3], uCurveW[4]);
-    float wg = evalCurve(rgb.g, uCurveW[0], uCurveW[1], uCurveW[2], uCurveW[3], uCurveW[4]);
-    float wb = evalCurve(rgb.b, uCurveW[0], uCurveW[1], uCurveW[2], uCurveW[3], uCurveW[4]);
-    rgb = vec3(wr, wg, wb);
-    rgb.r = evalCurve(rgb.r, uCurveR[0], uCurveR[1], uCurveR[2], uCurveR[3], uCurveR[4]);
-    rgb.g = evalCurve(rgb.g, uCurveG[0], uCurveG[1], uCurveG[2], uCurveG[3], uCurveG[4]);
-    rgb.b = evalCurve(rgb.b, uCurveB[0], uCurveB[1], uCurveB[2], uCurveB[3], uCurveB[4]);
+    // Master (white) curve remaps luminance so hue/ratios stay intact.
+    // Applying it per-channel (old behavior) splits colors and looks like artifacting.
+    float luma = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+    float mapped = evalCurve(luma, uCurveW[0], uCurveW[1], uCurveW[2], uCurveW[3], uCurveW[4]);
+    if (luma > 1e-5) {
+      rgb *= mapped / luma;
+    } else {
+      rgb = vec3(mapped);
+    }
+    rgb.r = evalCurve(clamp(rgb.r, 0.0, 1.0), uCurveR[0], uCurveR[1], uCurveR[2], uCurveR[3], uCurveR[4]);
+    rgb.g = evalCurve(clamp(rgb.g, 0.0, 1.0), uCurveG[0], uCurveG[1], uCurveG[2], uCurveG[3], uCurveG[4]);
+    rgb.b = evalCurve(clamp(rgb.b, 0.0, 1.0), uCurveB[0], uCurveB[1], uCurveB[2], uCurveB[3], uCurveB[4]);
+    rgb = clamp(rgb, 0.0, 1.0);
   }
 
   if (abs(uDefinition) > 0.1) {
