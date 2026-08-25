@@ -264,7 +264,17 @@ async function exportWithMediabunny(options: {
     target,
   });
 
-  const videoSource = new CanvasSource(canvas, {
+  // Encode from a 2D canvas — WebGL canvases often capture as black on the first frame
+  // (Android gallery thumbnails use that first IDR frame).
+  const encodeCanvas = document.createElement('canvas');
+  encodeCanvas.width = w;
+  encodeCanvas.height = h;
+  const encodeCtx = encodeCanvas.getContext('2d', { alpha: false, colorSpace: 'srgb' });
+  if (!encodeCtx) {
+    throw new Error('Could not allocate an encode canvas for export.');
+  }
+
+  const videoSource = new CanvasSource(encodeCanvas, {
     codec: videoCodec,
     quality: new Quality({ bitrate: videoBitsPerSecond, bitrateMode: 'variable' }),
     keyFrameInterval: 1,
@@ -290,6 +300,8 @@ async function exportWithMediabunny(options: {
   const frameDt = 1 / EXPORT_FPS;
   const totalFrames = Math.max(1, Math.round(sourceDuration * EXPORT_FPS));
   const sink = new VideoSampleSink(videoTrack);
+  const firstTs = (await videoTrack.getFirstTimestamp()) || 0;
+
   const decodeCanvas = document.createElement('canvas');
   decodeCanvas.width = w;
   decodeCanvas.height = h;
@@ -298,21 +310,35 @@ async function exportWithMediabunny(options: {
     throw new Error('Could not allocate a decode canvas for export.');
   }
 
+  let encoded = 0;
+  let havePicture = false;
+
   for (let i = 0; i < totalFrames; i++) {
-    const t = Math.min(Math.max(0, sourceDuration - 1e-4), i * frameDt);
+    const t = firstTs + Math.min(Math.max(0, sourceDuration - 1e-4), i * frameDt);
     const sample = await sink.getSample(t);
-    if (!sample) {
-      // Hold last graded frame if a timestamp has no sample.
-      await videoSource.add(i * frameDt, frameDt);
-      onProgress?.(t);
+    if (sample) {
+      decodeCtx.fillStyle = '#000';
+      decodeCtx.fillRect(0, 0, w, h);
+      sample.draw(decodeCtx, 0, 0, w, h);
+      sample.close();
+      paintGradedFromSource(renderer, canvas, decodeCanvas, w, h);
+      renderer.flush();
+      encodeCtx.drawImage(canvas, 0, 0, w, h);
+      havePicture = true;
+    } else if (!havePicture) {
+      // Do not encode leading black frames — they become the gallery thumbnail.
       continue;
     }
-    decodeCtx.clearRect(0, 0, w, h);
-    sample.draw(decodeCtx, 0, 0, w, h);
-    sample.close();
-    paintGradedFromSource(renderer, canvas, decodeCanvas, w, h);
-    await videoSource.add(i * frameDt, frameDt);
-    onProgress?.(t);
+    // else: hold last graded picture on encodeCanvas
+
+    const outTime = encoded * frameDt;
+    await videoSource.add(outTime, frameDt, encoded === 0 ? { keyFrame: true } : undefined);
+    encoded += 1;
+    onProgress?.(Math.min(sourceDuration, i * frameDt));
+  }
+
+  if (encoded === 0) {
+    throw new Error('Export could not decode any video frames.');
   }
   videoSource.close();
 

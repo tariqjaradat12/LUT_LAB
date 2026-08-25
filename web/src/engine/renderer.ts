@@ -317,6 +317,11 @@ export class GradeRenderer {
     return this.canvas;
   }
 
+  /** Ensure GPU commands are complete before another API reads the canvas (export thumbnails). */
+  flush() {
+    this.gl.finish();
+  }
+
   render() {
     this.draw(true);
   }
