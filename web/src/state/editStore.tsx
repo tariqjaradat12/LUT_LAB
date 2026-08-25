@@ -31,6 +31,8 @@ type Store = {
   videoDuration: number;
   videoWidth: number;
   videoHeight: number;
+  /** Source file size in bytes (for matching export bitrate). */
+  videoSourceBytes: number;
   colorSpace: 'rec709';
   error: string | null;
   setError: (msg: string | null) => void;
@@ -85,6 +87,7 @@ export function EditProvider({ children }: { children: ReactNode }) {
   const [videoDuration, setVideoDuration] = useState(0);
   const [videoWidth, setVideoWidth] = useState(0);
   const [videoHeight, setVideoHeight] = useState(0);
+  const [videoSourceBytes, setVideoSourceBytes] = useState(0);
 
   const clearVideo = useCallback(() => {
     setVideoEl((prev) => {
@@ -98,6 +101,7 @@ export function EditProvider({ children }: { children: ReactNode }) {
     setVideoDuration(0);
     setVideoWidth(0);
     setVideoHeight(0);
+    setVideoSourceBytes(0);
     setMediaKind((prev) => (prev === 'video' ? null : prev));
   }, []);
 
@@ -189,6 +193,7 @@ export function EditProvider({ children }: { children: ReactNode }) {
         setVideoDuration(loaded.duration);
         setVideoWidth(loaded.width);
         setVideoHeight(loaded.height);
+        setVideoSourceBytes(file.size);
         setMediaKind('video');
         pendingVideoUrl = null;
       } else {
@@ -285,6 +290,7 @@ export function EditProvider({ children }: { children: ReactNode }) {
       videoDuration,
       videoWidth,
       videoHeight,
+      videoSourceBytes,
       colorSpace: 'rec709' as const,
       error,
       setError,
@@ -309,7 +315,7 @@ export function EditProvider({ children }: { children: ReactNode }) {
     [
       params, setParam, patchParams, resetParams, imageBitmap, blendBitmap,
       mediaKind, hasMedia, hasImage, videoEl, videoObjectUrl, videoDuration,
-      videoWidth, videoHeight, error, openMedia, openImage, openBlendImage,
+      videoWidth, videoHeight, videoSourceBytes, error, openMedia, openImage, openBlendImage,
       clearVideo, clearBlend, section, filmSub, presetLuts, presetsLoading,
       importedLuts, activeLutId, activeLutData, importLutFile, selectLut, removeLut,
     ],

@@ -16,6 +16,7 @@ export default function App() {
     mediaKind,
     videoEl,
     videoDuration,
+    videoSourceBytes,
     params,
   } = useEditStore();
   const rendererRef = useRef<GradeRenderer | null>(null);
@@ -41,6 +42,7 @@ export default function App() {
           video: videoEl,
           renderer: rendererRef.current,
           params,
+          sourceByteSize: videoSourceBytes,
           onProgress: (t) => {
             if (videoDuration > 0) {
               setExportProgress(Math.min(100, (t / videoDuration) * 100));

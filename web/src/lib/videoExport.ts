@@ -1,12 +1,19 @@
 import fixWebmDuration from 'fix-webm-duration';
 import type { GradeRenderer } from '../engine/renderer';
 import type { EditParams } from '../engine/types';
-import { canExportDuration, pickRecorderMimeType, suggestVideoBitrate } from './videoIO';
+import {
+  canExportDuration,
+  chooseExportVideoBitrate,
+  estimateSourceBitrate,
+  pickRecorderMimeType,
+} from './videoIO';
 
 export type ExportGradedVideoArgs = {
   video: HTMLVideoElement;
   renderer: GradeRenderer;
   params: EditParams;
+  /** Original file size in bytes — used to match native bitrate. */
+  sourceByteSize?: number;
   onProgress?: (t: number) => void;
 };
 
@@ -114,12 +121,27 @@ function fixWebmBlobDuration(blob: Blob, durationSec: number): Promise<Blob> {
   });
 }
 
+function assertNativeCaptureSize(stream: MediaStream, w: number, h: number) {
+  const track = stream.getVideoTracks()[0];
+  if (!track || typeof track.getSettings !== 'function') return;
+  const settings = track.getSettings();
+  const sw = settings.width;
+  const sh = settings.height;
+  if (!sw || !sh) return;
+  // Allow 1px rounding; anything else means the browser silently downscaled.
+  if (sw < w - 1 || sh < h - 1) {
+    throw new Error(
+      `This browser downscaled export to ${sw}×${sh} (source is ${w}×${h}). Try desktop Chrome/Edge, or a shorter/smaller clip.`,
+    );
+  }
+}
+
 /**
- * Record the graded WebGL canvas at native video resolution.
- * Never downscales (no scale factor &lt; 1). Prefer MP4 when MediaRecorder supports it.
+ * Record the graded WebGL canvas at native video resolution and source bitrate.
+ * Never downscales. Prefer MP4 when MediaRecorder supports it.
  */
 export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise<Blob> {
-  const { video, renderer, params, onProgress } = options;
+  const { video, renderer, params, sourceByteSize, onProgress } = options;
 
   if (!canExportDuration(video.duration)) {
     throw new Error('Export is limited to 15 minutes.');
@@ -154,16 +176,23 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
     throw new Error(`Could not allocate a ${w}×${h} export canvas on this device.`);
   }
 
-  const videoBitsPerSecond = suggestVideoBitrate(w, h, 30);
+  const sourceBitrate = estimateSourceBitrate(sourceByteSize ?? 0, sourceDuration);
+  const videoBitsPerSecond = chooseExportVideoBitrate({
+    width: w,
+    height: h,
+    sourceBitrate,
+    fps: 30,
+  });
 
   const { stream, requestFrame } = startCanvasCapture(canvas);
+  assertNativeCaptureSize(stream, w, h);
   tryAddAudioTracks(video, stream);
 
   const chunks: BlobPart[] = [];
   const recorder = new MediaRecorder(stream, {
     mimeType: mime,
     videoBitsPerSecond,
-    audioBitsPerSecond: 192_000,
+    audioBitsPerSecond: 256_000,
   });
 
   const blobPromise = new Promise<Blob>((resolve, reject) => {
@@ -263,6 +292,8 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
     // No timeslice: one complete blob on stop is more reliable for duration/metadata
     // (especially MP4) than many tiny fragments.
     recorder.start();
+    // Some engines only populate track settings after recording begins.
+    assertNativeCaptureSize(stream, w, h);
     startPump();
     await video.play();
     await waitForEnded(video);

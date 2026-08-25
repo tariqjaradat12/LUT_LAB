@@ -33,12 +33,40 @@ export function pickRecorderMimeType(): string | null {
   return null;
 }
 
-/** Target encode bitrate from frame size (≈0.12 bpp @ 30fps, clamped). */
+/** Average bits/sec of the source file (video + audio + container). */
+export function estimateSourceBitrate(byteSize: number, durationSec: number): number | null {
+  if (!Number.isFinite(byteSize) || byteSize <= 0) return null;
+  if (!Number.isFinite(durationSec) || durationSec <= 0) return null;
+  return Math.round((byteSize * 8) / durationSec);
+}
+
+/**
+ * Encode bitrate for export: prefer the source file's average rate so graded
+ * output is not softer than the original. Falls back to a resolution heuristic.
+ * Only clamps at an extreme ceiling for browser stability — not a quality cap.
+ */
+export function chooseExportVideoBitrate(options: {
+  width: number;
+  height: number;
+  sourceBitrate?: number | null;
+  fps?: number;
+}): number {
+  const w = Math.max(1, options.width | 0);
+  const h = Math.max(1, options.height | 0);
+  const fps = Math.max(1, options.fps ?? 30);
+  // Heuristic floor when source size is unknown (~0.15 bits/pixel/frame).
+  const fromResolution = Math.round(w * h * fps * 0.15);
+  const src = options.sourceBitrate;
+  // Leave a little headroom for the audio track MediaRecorder muxes separately.
+  const fromSource =
+    src != null && Number.isFinite(src) && src > 0 ? Math.max(0, Math.round(src - 256_000)) : 0;
+  const target = Math.max(fromResolution, fromSource, 8_000_000);
+  return Math.min(target, 200_000_000);
+}
+
+/** @deprecated use chooseExportVideoBitrate */
 export function suggestVideoBitrate(width: number, height: number, fps = 30): number {
-  const w = Math.max(1, width | 0);
-  const h = Math.max(1, height | 0);
-  const rate = Math.round(w * h * Math.max(1, fps) * 0.12);
-  return Math.min(40_000_000, Math.max(8_000_000, rate));
+  return chooseExportVideoBitrate({ width, height, fps });
 }
 
 export function revokeVideoUrl(url: string | null | undefined) {
