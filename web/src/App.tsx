@@ -79,7 +79,7 @@ export default function App() {
         exporting={exporting}
         exportingRef={exportingRef}
       />
-      <ToolPanel />
+      <ToolPanel exporting={exporting} />
     </div>
   );
 }

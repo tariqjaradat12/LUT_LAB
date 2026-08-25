@@ -119,14 +119,16 @@ export function PreviewStage({ rendererRef, exporting = false, exportingRef }: P
   }, [imageBitmap, mediaKind, rendererRef]);
 
   useEffect(() => {
+    if (exporting || exportingRef?.current) return;
     rendererRef.current?.setBlendImage(blendBitmap);
-  }, [blendBitmap, rendererRef]);
+  }, [blendBitmap, rendererRef, exporting, exportingRef]);
 
   useEffect(() => {
+    if (exporting || exportingRef?.current) return;
     const r = rendererRef.current;
     if (!r) return;
     r.setLut(activeLutData, 33);
-  }, [activeLutData, rendererRef]);
+  }, [activeLutData, rendererRef, exporting, exportingRef]);
 
   useEffect(() => {
     if (exporting || exportingRef?.current) return;
@@ -263,7 +265,7 @@ export function PreviewStage({ rendererRef, exporting = false, exportingRef }: P
         ))}
         {mediaKind === 'video' && <div className="color-badge">Rec.709</div>}
       </div>
-      {mediaKind === 'video' && videoEl && (
+      {mediaKind === 'video' && videoEl && !exporting && (
         <VideoTransport video={videoEl} duration={videoDuration} />
       )}
     </section>

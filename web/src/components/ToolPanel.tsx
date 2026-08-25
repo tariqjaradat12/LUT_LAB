@@ -29,7 +29,11 @@ const FILM_TABS: { id: FilmSubTab; label: string }[] = [
   { id: 'anamorphic', label: 'Anamorphic streaks' },
 ];
 
-export function ToolPanel() {
+type ToolPanelProps = {
+  exporting?: boolean;
+};
+
+export function ToolPanel({ exporting = false }: ToolPanelProps) {
   const {
     params, setParam, patchParams, section, setSection, filmSub, setFilmSub,
     openBlendImage, clearBlend, blendBitmap,
@@ -37,7 +41,11 @@ export function ToolPanel() {
   const [hslBand, setHslBand] = useState<HueBand>('red');
 
   return (
-    <aside className={`panel${section === 'luts' ? ' panel--luts' : ''}`}>
+    <aside
+      className={`panel${section === 'luts' ? ' panel--luts' : ''}`}
+      style={exporting ? { pointerEvents: 'none' } : undefined}
+      aria-disabled={exporting || undefined}
+    >
       <nav className="section-tabs">
         {SECTIONS.map((s) => (
           <button

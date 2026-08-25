@@ -90,6 +90,10 @@ function tryAddAudioTracks(video: HTMLVideoElement, stream: MediaStream) {
     for (const track of src.getAudioTracks()) {
       stream.addTrack(track);
     }
+    // Only audio is needed; stop unused video tracks from the element capture.
+    for (const track of src.getVideoTracks()) {
+      track.stop();
+    }
   } catch {
     // Video-only export is acceptable when audio capture is blocked.
   }
