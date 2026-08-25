@@ -40,16 +40,6 @@ export function PreviewStage({ rendererRef, exporting = false, exportingRef }: P
   const pins: PinDef[] = [];
   const pinMedia = hasMedia;
 
-  if (pinMedia && section === 'film' && filmSub === 'halation') {
-    pins.push({
-      id: 'halation',
-      x: params.halationCenter.x,
-      y: params.halationCenter.y,
-      title: 'Halation',
-      onMove: (x, y) => patchParams({ halationCenter: { x, y } }),
-    });
-  }
-
   if (pinMedia && section === 'film' && filmSub === 'anamorphic') {
     pins.push({
       id: 'anamorphic',

@@ -1,6 +1,5 @@
 import { BLEND_MODE_INDEX, HUE_BANDS, type CurveChannels, type CurvePoint, type EditParams } from './types';
 import { FRAG, VERT } from './shaderSource';
-import { hexToRgb } from '../lib/imageIO';
 import { bakeCurveAtlas } from '../lib/curveMath';
 import { lutDataToTextureBytes } from './lutEngine';
 
@@ -94,7 +93,6 @@ export class GradeRenderer {
       'uSharpen', 'uDefinition', 'uSoftness', 'uDenoiseL', 'uDenoiseC',
       'uVigStrength', 'uVigRadius', 'uVigSoft',
       'uGrainAmount', 'uGrainSize', 'uGrainRough',
-      'uHalStrength', 'uHalRadius', 'uHalColor', 'uHalCenter',
       'uBokehStrength', 'uBokehAperture', 'uBokehCenter',
       'uLongAmt', 'uLongDir', 'uLongCenter',
       'uLinMask', 'uLinStart', 'uLinEnd', 'uLinFeather', 'uCircMask', 'uCircCenter', 'uCircRadius',
@@ -322,11 +320,6 @@ export class GradeRenderer {
     gl.uniform1f(L.uGrainAmount, p.grainAmount);
     gl.uniform1f(L.uGrainSize, p.grainSize);
     gl.uniform1f(L.uGrainRough, p.grainRoughness);
-    gl.uniform1f(L.uHalStrength, p.halationStrength);
-    gl.uniform1f(L.uHalRadius, p.halationRadius);
-    const [hr, hg, hb] = hexToRgb(p.halationColor);
-    gl.uniform3f(L.uHalColor, hr, hg, hb);
-    gl.uniform2f(L.uHalCenter, p.halationCenter.x, p.halationCenter.y);
     gl.uniform1f(L.uBokehStrength, p.bokehStrength);
     gl.uniform1f(L.uBokehAperture, p.bokehAperture);
     gl.uniform2f(L.uBokehCenter, p.bokehCenter.x, p.bokehCenter.y);

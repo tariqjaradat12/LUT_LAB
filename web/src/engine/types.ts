@@ -77,10 +77,6 @@ export interface EditParams {
   grainAmount: number;
   grainSize: number;
   grainRoughness: number;
-  halationStrength: number;
-  halationRadius: number;
-  halationColor: string;
-  halationCenter: Point2D;
   bokehStrength: number;
   bokehAperture: number;
   bokehCenter: Point2D;
@@ -156,10 +152,6 @@ export const DEFAULT_EDIT_PARAMS: EditParams = {
   grainAmount: 0,
   grainSize: 2.5,
   grainRoughness: 0.45,
-  halationStrength: 0,
-  halationRadius: 0.3,
-  halationColor: '#FF4422',
-  halationCenter: { x: 0.5, y: 0.35 },
   bokehStrength: 0,
   bokehAperture: 5.6,
   bokehCenter: { x: 0.5, y: 0.5 },
@@ -196,4 +188,4 @@ export type ToolSection =
   | 'double'
   | 'luts';
 
-export type FilmSubTab = 'vignette' | 'grain' | 'halation' | 'bokeh' | 'anamorphic';
+export type FilmSubTab = 'vignette' | 'grain' | 'bokeh' | 'anamorphic';

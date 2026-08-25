@@ -24,7 +24,6 @@ const fStop = (v: number) => `f/${v.toFixed(1)}`;
 const FILM_TABS: { id: FilmSubTab; label: string }[] = [
   { id: 'vignette', label: 'Vignette' },
   { id: 'grain', label: 'Grain' },
-  { id: 'halation', label: 'Halation' },
   { id: 'bokeh', label: 'Bokeh' },
   { id: 'anamorphic', label: 'Anamorphic streaks' },
 ];
@@ -161,17 +160,6 @@ export function ToolPanel({ exporting = false }: ToolPanelProps) {
                 <Slider label="Amount" value={params.grainAmount} min={0} max={100} onChange={(v) => setParam('grainAmount', v)} format={pct} />
                 <Slider label="Size" value={params.grainSize} min={0.5} max={8} step={0.1} onChange={(v) => setParam('grainSize', v)} format={(v) => v.toFixed(1)} />
                 <Slider label="Roughness" value={params.grainRoughness} min={0} max={1} step={0.01} onChange={(v) => setParam('grainRoughness', v)} format={(v) => v.toFixed(2)} />
-              </>
-            )}
-            {filmSub === 'halation' && (
-              <>
-                <p className="hint">Drag the plus onto a bright highlight (sun, lamp, sky). Raise strength and radius to spread the glow.</p>
-                <Slider label="Strength" value={params.halationStrength} min={0} max={100} onChange={(v) => setParam('halationStrength', v)} format={pct} />
-                <Slider label="Radius" value={params.halationRadius} min={0.05} max={0.8} step={0.01} onChange={(v) => setParam('halationRadius', v)} format={(v) => v.toFixed(2)} />
-                <div className="row">
-                  <span>Color</span>
-                  <input type="color" value={params.halationColor} onChange={(e) => setParam('halationColor', e.target.value)} />
-                </div>
               </>
             )}
             {filmSub === 'bokeh' && (

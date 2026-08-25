@@ -17,7 +17,6 @@ function cloneHsl(hsl: HSLAdjustments): HSLAdjustments {
 export function cloneDefaultParams(): EditParams {
   return {
     ...DEFAULT_EDIT_PARAMS,
-    halationCenter: { ...DEFAULT_EDIT_PARAMS.halationCenter },
     bokehCenter: { ...DEFAULT_EDIT_PARAMS.bokehCenter },
     longExposureCenter: { ...DEFAULT_EDIT_PARAMS.longExposureCenter },
     linearMaskStart: { ...DEFAULT_EDIT_PARAMS.linearMaskStart },

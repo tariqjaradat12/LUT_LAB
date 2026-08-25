@@ -50,11 +50,6 @@ uniform float uGrainAmount;
 uniform float uGrainSize;
 uniform float uGrainRough;
 
-uniform float uHalStrength;
-uniform float uHalRadius;
-uniform vec3 uHalColor;
-uniform vec2 uHalCenter;
-
 uniform float uBokehStrength;
 uniform float uBokehAperture;
 uniform vec2 uBokehCenter;
@@ -275,38 +270,6 @@ vec3 blendDx(vec3 base, vec3 over, int mode) {
   return max(base, over);
 }
 
-// Film halation: tinted highlight bloom, localized around the draggable pin.
-vec3 applyHalation(vec2 uv, vec3 rgb) {
-  if (uHalStrength <= 0.1) return rgb;
-
-  float zone = 1.0 - smoothstep(0.0, max(uHalRadius, 0.02), distance(uv, uHalCenter));
-  if (zone < 0.001) return rgb;
-
-  float str = uHalStrength / 100.0;
-  float pixL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-
-  // Blurred highlight field (bloom source).
-  float minRes = min(uResolution.x, uResolution.y);
-  float blurPx = max(uHalRadius * minRes * 0.14, 5.0);
-  vec3 blurred = gaussianSoft(uv, blurPx);
-  float bloom = smoothstep(0.18, 0.72, dot(blurred, vec3(0.2126, 0.7152, 0.0722)));
-
-  // Pin selects the emitter — drag it onto a bright highlight.
-  float centerHi = 0.0;
-  for (int i = 0; i < 6; i++) {
-    float ang = float(i) * 1.047197551;
-    vec2 off = vec2(cos(ang), sin(ang)) * uHalRadius * 0.14;
-    centerHi += dot(sampleImg(uHalCenter + off), vec3(0.2126, 0.7152, 0.0722));
-  }
-  centerHi /= 6.0;
-  float emitter = mix(0.35, 1.0, smoothstep(0.25, 0.82, centerHi));
-
-  float receive = 1.0 - smoothstep(0.0, 0.68, pixL);
-  float emit = smoothstep(0.48, 0.96, pixL);
-  vec3 hal = uHalColor * bloom * (receive * 1.25 + emit * 0.55) * zone * str * emitter;
-  return clamp(rgb + hal * 2.0, 0.0, 1.0);
-}
-
 float linearMaskWeight(vec2 uv) {
   vec2 ab = uLinEnd - uLinStart;
   float len2 = dot(ab, ab);
@@ -499,10 +462,6 @@ void main() {
       vec3 blurred = gaussianSoft(uv, radius);
       rgb = mix(rgb, blurred, clamp(blurAmt, 0.0, 1.0));
     }
-  }
-
-  if (uHalStrength > 0.1) {
-    rgb = applyHalation(uv, rgb);
   }
 
   if (uVigStrength > 0.1) {
