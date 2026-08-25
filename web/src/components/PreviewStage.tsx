@@ -16,6 +16,7 @@ type PinDef = {
 
 export function PreviewStage({ rendererRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLElement>(null);
   const { params, imageBitmap, blendBitmap, hasImage, section, filmSub, patchParams, setError, activeLutData } =
     useEditStore();
 
@@ -114,17 +115,35 @@ export function PreviewStage({ rendererRef }: Props) {
   }, [params, rendererRef]);
 
   useEffect(() => {
-    const onResize = () => rendererRef.current?.render();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const relayout = () => rendererRef.current?.render();
+    const ro = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(relayout)
+      : null;
+    ro?.observe(stage);
+
+    window.addEventListener('resize', relayout);
+    window.visualViewport?.addEventListener('resize', relayout);
+    window.visualViewport?.addEventListener('scroll', relayout);
+
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', relayout);
+      window.visualViewport?.removeEventListener('resize', relayout);
+      window.visualViewport?.removeEventListener('scroll', relayout);
+    };
   }, [rendererRef]);
 
   const onPinPointer = (pin: PinDef) => (e: ReactPointerEvent<HTMLDivElement>) => {
-    const stage = e.currentTarget.parentElement;
-    if (!stage) return;
+    const frame = e.currentTarget.parentElement;
+    if (!frame) return;
     e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
     const move = (ev: PointerEvent) => {
-      const rect = stage.getBoundingClientRect();
+      const rect = frame.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return;
       const x = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
       const y = Math.min(1, Math.max(0, (ev.clientY - rect.top) / rect.height));
       pin.onMove(x, y);
@@ -132,30 +151,34 @@ export function PreviewStage({ rendererRef }: Props) {
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
     move(e.nativeEvent);
   };
 
   return (
-    <section className="stage">
+    <section className="stage" ref={stageRef}>
       {!hasImage && (
         <div className="stage-empty">
           <h2>Open a still</h2>
           <p>Grade locally in the browser. Nothing leaves your device.</p>
         </div>
       )}
-      <canvas ref={canvasRef} style={{ opacity: hasImage ? 1 : 0 }} />
-      {pins.map((pin) => (
-        <div
-          key={pin.id}
-          className="hal-pin"
-          style={{ left: `${pin.x * 100}%`, top: `${pin.y * 100}%` }}
-          onPointerDown={onPinPointer(pin)}
-          title={pin.title}
-        />
-      ))}
+      <div className="stage-frame" style={{ display: hasImage ? 'block' : 'none' }}>
+        <canvas ref={canvasRef} />
+        {pins.map((pin) => (
+          <div
+            key={pin.id}
+            className="hal-pin"
+            style={{ left: `${pin.x * 100}%`, top: `${pin.y * 100}%` }}
+            onPointerDown={onPinPointer(pin)}
+            title={pin.title}
+          />
+        ))}
+      </div>
     </section>
   );
 }

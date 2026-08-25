@@ -128,6 +128,10 @@ export class GradeRenderer {
     }
   }
 
+  private stageElement(): HTMLElement | null {
+    return this.canvas.closest('.stage') as HTMLElement | null;
+  }
+
   private upload(target: WebGLTexture, bitmap: ImageBitmap) {
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, target);
@@ -142,7 +146,7 @@ export class GradeRenderer {
     if (!this.tex) this.tex = this.gl.createTexture();
     this.upload(this.tex!, bitmap);
     this.imageSize = { w: bitmap.width, h: bitmap.height };
-    const stage = this.canvas.parentElement;
+    const stage = this.stageElement();
     if (stage) this.fitToStage(stage.clientWidth, stage.clientHeight);
     this.render();
   }
@@ -191,7 +195,7 @@ export class GradeRenderer {
   }
 
   resize() {
-    const stage = this.canvas.parentElement;
+    const stage = this.stageElement();
     if (stage) this.fitToStage(stage.clientWidth, stage.clientHeight);
   }
 

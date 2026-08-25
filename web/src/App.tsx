@@ -22,8 +22,10 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopBar onExport={onExport} />
-      {error && <div className="error-banner">{error}</div>}
+      <div className="app-chrome">
+        <TopBar onExport={onExport} />
+        {error && <div className="error-banner">{error}</div>}
+      </div>
       <PreviewStage rendererRef={rendererRef} />
       <ToolPanel />
     </div>
