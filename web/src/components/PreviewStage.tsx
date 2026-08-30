@@ -232,7 +232,7 @@ export function PreviewStage({ rendererRef, exporting = false, exportingRef }: P
           <p>Grade locally in the browser. Nothing leaves your device.</p>
         </div>
       )}
-      <div className="stage-frame" style={{ display: hasMedia ? 'block' : 'none' }}>
+      <div className="stage-frame" style={{ display: hasMedia ? 'block' : 'none' }} data-editing={hasMedia || undefined}>
         <canvas ref={canvasRef} />
         {pins.map((pin) => (
           <div

@@ -3,6 +3,7 @@ import { BLEND_MODES, HUE_BANDS, type FilmSubTab, type HueBand, type ToolSection
 import { useEditStore } from '../state/editStore';
 import { CurveEditor } from './CurveEditor';
 import { LutLooksPanel } from './LutLooksPanel';
+import { AdSlot } from './AdSlot';
 import { Slider, Toggle } from './Slider';
 
 const SECTIONS: { id: ToolSection; label: string }[] = [
@@ -237,6 +238,7 @@ export function ToolPanel({ exporting = false }: ToolPanelProps) {
           </>
         )}
       </div>
+      <AdSlot hidden={exporting} />
     </aside>
   );
 }

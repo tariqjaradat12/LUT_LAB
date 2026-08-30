@@ -16,12 +16,14 @@ export function Slider({ label, value, min, max, step = 1, onChange, format }: P
         <span>{format ? format(value) : value}</span>
       </div>
       <input
+        className="slider-input"
         type="range"
         min={min}
         max={max}
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
+        onPointerDown={(e) => e.stopPropagation()}
       />
     </label>
   );
@@ -43,6 +45,7 @@ export function Toggle({
         type="button"
         className={`toggle${value ? ' on' : ''}`}
         aria-pressed={value}
+        aria-label={label}
         onClick={() => onChange(!value)}
       >
         <i />
