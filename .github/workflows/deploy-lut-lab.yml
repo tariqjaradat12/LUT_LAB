@@ -46,7 +46,7 @@ jobs:
           cp dist/index.html dist/404.html
 
       - name: Publish to tariqjaradat12.github.io
-        if: ${{ secrets.GH_PAGES_DEPLOY_KEY != '' }}
+        if: ${{ vars.ENABLE_USER_PAGES == 'true' }}
         uses: peaceiris/actions-gh-pages@v4
         with:
           deploy_key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}
