@@ -38,6 +38,9 @@ export function TopBar({ onExport, exporting = false }: Props) {
         >
           {exporting ? 'Exporting…' : 'Export'}
         </button>
+        <a className="btn btn-ghost" href={`${import.meta.env.BASE_URL}privacy.html`}>
+          Privacy
+        </a>
       </div>
     </header>
   );

@@ -27,26 +27,15 @@ Open http://localhost:5173
 
 ## Google AdSense
 
-Your publisher ID (`ca-pub-8588643882726955`) is verified via:
+**The AdSense “website” field needs a domain — not “Lut Lab”.**  
+See **[docs/ADSENSE_SETUP.md](docs/ADSENSE_SETUP.md)** for full steps.
 
-- `<meta name="google-adsense-account">` in `index.html` `<head>`
-- AdSense script in `<head>`
-- `public/ads.txt` at `/LUT_LAB/ads.txt`
+Quick summary:
 
-**In AdSense, add the site exactly as:** `tariqjaradat12.github.io/LUT_LAB`  
-(include the `/LUT_LAB` path — not just `github.io`).
-
-After deploy, wait a few minutes, then click **Verify** in AdSense. Use the **Meta tag** verification method if offered.
-
-To show ads in the tool panel footer:
-
-1. In [AdSense](https://adsense.google.com) go to **Ads → By ad unit → Display ad**
-2. Create a responsive display unit for Lut Lab
-3. Copy the number from `data-ad-slot="…"` in the code Google gives you
-4. Add GitHub repo secret **`VITE_ADSENSE_SLOT`** (Settings → Secrets → Actions) with that number
-5. Redeploy (push to `main` or re-run the Deploy workflow)
-
-For local dev, put the same value in `web/.env` as `VITE_ADSENSE_SLOT=your_slot_number`.
+1. Try adding **`tariqjaradat12.github.io`** (no `https://`, no spaces, no app name).
+2. If Google rejects the `/LUT_LAB/` path, use a **custom domain** (best) or a **`tariqjaradat12.github.io`** user Pages repo at the site root.
+3. Verification tags and `ads.txt` are already in the build.
+4. Link to the **[privacy policy](https://tariqjaradat12.github.io/LUT_LAB/privacy.html)** is in the top bar.
 
 ## Custom domain (optional)
 

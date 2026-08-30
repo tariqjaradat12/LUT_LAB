@@ -26,13 +26,16 @@ jobs:
       - name: Build Lut Lab
         working-directory: web
         env:
-          VITE_BASE: /LUT_LAB/
+          VITE_BASE: ${{ vars.VITE_BASE || '/LUT_LAB/' }}
           VITE_ADSENSE_SLOT: ${{ secrets.VITE_ADSENSE_SLOT }}
         run: |
           npm ci
           npm run build
           touch dist/.nojekyll
           cp dist/index.html dist/404.html
+          if [ -n "${{ vars.CUSTOM_DOMAIN }}" ]; then
+            echo "${{ vars.CUSTOM_DOMAIN }}" > dist/CNAME
+          fi
 
       - name: Publish to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4

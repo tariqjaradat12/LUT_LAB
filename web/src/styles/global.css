@@ -126,6 +126,12 @@ button {
   font-weight: 600;
 }
 .btn-primary:hover { filter: brightness(1.05); }
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.btn-ghost:hover { color: var(--text); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .error-banner {
