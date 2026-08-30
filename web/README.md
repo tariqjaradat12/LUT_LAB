@@ -27,7 +27,16 @@ Open http://localhost:5173
 
 ## Google AdSense
 
-Your publisher ID (`ca-pub-8588643882726955`) is in `index.html` and `src/lib/adsConfig.ts`.
+Your publisher ID (`ca-pub-8588643882726955`) is verified via:
+
+- `<meta name="google-adsense-account">` in `index.html` `<head>`
+- AdSense script in `<head>`
+- `public/ads.txt` at `/LUT_LAB/ads.txt`
+
+**In AdSense, add the site exactly as:** `tariqjaradat12.github.io/LUT_LAB`  
+(include the `/LUT_LAB` path — not just `github.io`).
+
+After deploy, wait a few minutes, then click **Verify** in AdSense. Use the **Meta tag** verification method if offered.
 
 To show ads in the tool panel footer:
 
