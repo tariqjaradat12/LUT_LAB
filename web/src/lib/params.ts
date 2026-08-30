@@ -18,7 +18,6 @@ export function cloneDefaultParams(): EditParams {
   return {
     ...DEFAULT_EDIT_PARAMS,
     bokehCenter: { ...DEFAULT_EDIT_PARAMS.bokehCenter },
-    longExposureCenter: { ...DEFAULT_EDIT_PARAMS.longExposureCenter },
     linearMaskStart: { ...DEFAULT_EDIT_PARAMS.linearMaskStart },
     linearMaskEnd: { ...DEFAULT_EDIT_PARAMS.linearMaskEnd },
     circularMaskCenter: { ...DEFAULT_EDIT_PARAMS.circularMaskCenter },

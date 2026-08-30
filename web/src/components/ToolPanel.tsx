@@ -25,7 +25,6 @@ const FILM_TABS: { id: FilmSubTab; label: string }[] = [
   { id: 'vignette', label: 'Vignette' },
   { id: 'grain', label: 'Grain' },
   { id: 'bokeh', label: 'Bokeh' },
-  { id: 'anamorphic', label: 'Anamorphic streaks' },
 ];
 
 type ToolPanelProps = {
@@ -167,13 +166,6 @@ export function ToolPanel({ exporting = false }: ToolPanelProps) {
                 <p className="hint">Drag the plus to set what stays sharp. Lower f-numbers blur more.</p>
                 <Slider label="Strength" value={params.bokehStrength} min={0} max={100} onChange={(v) => setParam('bokehStrength', v)} format={pct} />
                 <Slider label="Aperture" value={params.bokehAperture} min={1.4} max={22} step={0.1} onChange={(v) => setParam('bokehAperture', v)} format={fStop} />
-              </>
-            )}
-            {filmSub === 'anamorphic' && (
-              <>
-                <p className="hint">Drag the plus onto your subject. Adds tiny light streaks around it — sparkle texture, not grain.</p>
-                <Slider label="Amount" value={params.longExposureAmount} min={0} max={100} onChange={(v) => setParam('longExposureAmount', v)} format={pct} />
-                <Slider label="Angle" value={params.longExposureDirection} min={-180} max={180} onChange={(v) => setParam('longExposureDirection', v)} format={(v) => `${Math.round(v)}°`} />
               </>
             )}
           </>

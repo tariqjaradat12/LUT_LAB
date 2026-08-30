@@ -80,9 +80,6 @@ export interface EditParams {
   bokehStrength: number;
   bokehAperture: number;
   bokehCenter: Point2D;
-  longExposureAmount: number;
-  longExposureDirection: number;
-  longExposureCenter: Point2D;
   linearMaskEnabled: boolean;
   linearMaskStart: Point2D;
   linearMaskEnd: Point2D;
@@ -155,9 +152,6 @@ export const DEFAULT_EDIT_PARAMS: EditParams = {
   bokehStrength: 0,
   bokehAperture: 5.6,
   bokehCenter: { x: 0.5, y: 0.5 },
-  longExposureAmount: 0,
-  longExposureDirection: 0,
-  longExposureCenter: { x: 0.5, y: 0.5 },
   linearMaskEnabled: false,
   linearMaskStart: { x: 0.35, y: 0.5 },
   linearMaskEnd: { x: 0.65, y: 0.5 },
@@ -188,4 +182,4 @@ export type ToolSection =
   | 'double'
   | 'luts';
 
-export type FilmSubTab = 'vignette' | 'grain' | 'bokeh' | 'anamorphic';
+export type FilmSubTab = 'vignette' | 'grain' | 'bokeh';

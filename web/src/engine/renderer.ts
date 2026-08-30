@@ -94,7 +94,6 @@ export class GradeRenderer {
       'uVigStrength', 'uVigRadius', 'uVigSoft',
       'uGrainAmount', 'uGrainSize', 'uGrainRough',
       'uBokehStrength', 'uBokehAperture', 'uBokehCenter',
-      'uLongAmt', 'uLongDir', 'uLongCenter',
       'uLinMask', 'uLinStart', 'uLinEnd', 'uLinFeather', 'uCircMask', 'uCircCenter', 'uCircRadius',
       'uMaskExposure', 'uMaskSat',
       'uDxEnabled', 'uDxOpacity', 'uDxOffset', 'uDxBlend',
@@ -323,9 +322,6 @@ export class GradeRenderer {
     gl.uniform1f(L.uBokehStrength, p.bokehStrength);
     gl.uniform1f(L.uBokehAperture, p.bokehAperture);
     gl.uniform2f(L.uBokehCenter, p.bokehCenter.x, p.bokehCenter.y);
-    gl.uniform1f(L.uLongAmt, p.longExposureAmount);
-    gl.uniform1f(L.uLongDir, p.longExposureDirection);
-    gl.uniform2f(L.uLongCenter, p.longExposureCenter.x, p.longExposureCenter.y);
     gl.uniform1i(L.uLinMask, p.linearMaskEnabled ? 1 : 0);
     gl.uniform2f(L.uLinStart, p.linearMaskStart.x, p.linearMaskStart.y);
     gl.uniform2f(L.uLinEnd, p.linearMaskEnd.x, p.linearMaskEnd.y);

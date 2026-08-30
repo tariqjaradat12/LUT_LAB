@@ -54,10 +54,6 @@ uniform float uBokehStrength;
 uniform float uBokehAperture;
 uniform vec2 uBokehCenter;
 
-uniform float uLongAmt;
-uniform float uLongDir;
-uniform vec2 uLongCenter;
-
 uniform int uLinMask;
 uniform vec2 uLinStart;
 uniform vec2 uLinEnd;
@@ -232,34 +228,29 @@ vec3 gaussianSoft(vec2 uv, float radiusPx) {
   return acc / wSum;
 }
 
-// Dreamy soft focus: remove detail while keeping grade brightness/color, plus fine grain.
+// Dreamy soft focus: gentle blur with capped strength so high slider values stay natural.
 vec3 applySoftness(vec2 uv, vec3 rgb) {
   if (uSoftness <= 0.5) return rgb;
 
-  float amt = clamp(uSoftness / 100.0, 0.0, 0.9);
+  float t = uSoftness / 100.0;
+  float amount = t * (2.0 - t) * 0.72;
   float minRes = min(uResolution.x, uResolution.y);
-  float radiusPx = max(uSoftness * minRes * 0.0035, 1.5);
-  vec2 pxStep = radiusPx / uResolution;
+  float radiusPx = amount * minRes * 0.005 + 1.0;
 
-  vec3 acc = vec3(0.0);
-  float wSum = 0.0;
-  for (int x = -4; x <= 4; x++) {
-    for (int y = -4; y <= 4; y++) {
-      float w = exp(-float(x * x + y * y) / 12.0);
-      acc += sampleImg(uv + vec2(float(x), float(y)) * pxStep) * w;
-      wSum += w;
-    }
-  }
-  vec3 blurred = acc / wSum;
-  // Apply blur to structure only; keep the graded color offset so exposure doesn't drop.
-  vec3 soft = blurred + (rgb - sampleImg(uv));
-  rgb = mix(rgb, soft, amt);
+  vec3 blurred = gaussianSoft(uv, radiusPx);
+  vec3 blurredFine = gaussianSoft(uv, radiusPx * 0.55);
+  vec3 blur = mix(blurred, blurredFine, 0.35);
 
   float pixL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-  vec2 gp = uv * uResolution * 0.55;
-  float n = softNoise(gp) * 0.6 + softNoise(gp * 2.4 + 1.7) * 0.4;
-  float grain = (n - 0.5) * amt * 0.055;
-  rgb += vec3(grain) * mix(0.4, 1.0, pixL);
+  float blurL = max(dot(blur, vec3(0.2126, 0.7152, 0.0722)), 0.001);
+  vec3 soft = mix(rgb, blur * (pixL / blurL), 0.62);
+  rgb = mix(rgb, soft, amount);
+
+  if (t > 0.2 && t < 0.82) {
+    float grain = (softNoise(uv * uResolution * 0.52) - 0.5) * t * 0.035;
+    rgb += vec3(grain) * mix(0.45, 1.0, pixL);
+  }
+
   return clamp(rgb, 0.0, 1.0);
 }
 
@@ -299,59 +290,6 @@ vec3 blendDx(vec3 base, vec3 over, int mode) {
   }
   if (mode == 6) return 1.0 - (1.0 - base) * (1.0 - over);
   return max(base, over);
-}
-
-// One micro-streak particle in a grid cell.
-vec3 microStreakAt(vec2 px, vec2 dirPx, vec2 perpPx, vec2 cellId, float cellSize, float str) {
-  float h0 = hash(cellId);
-  if (h0 >= 0.18 + str * 0.6) return vec3(0.0);
-
-  vec2 center = (cellId + vec2(hash(cellId + 1.7), hash(cellId + 9.2))) * cellSize;
-  vec2 d = px - center;
-  float along = abs(dot(d, dirPx));
-  float perp = abs(dot(d, perpPx));
-  float lenPx = (2.5 + h0 * 10.0) * (0.55 + str * 0.55);
-  float widthPx = 0.45 + hash(cellId + 3.3) * 1.0;
-  float particle = (1.0 - smoothstep(lenPx * 0.5, lenPx * 0.5 + 1.0, along))
-                 * (1.0 - smoothstep(0.0, widthPx, perp));
-  if (particle < 0.003) return vec3(0.0);
-
-  vec3 warm = vec3(1.0, 0.94, 0.82);
-  vec3 cool = vec3(0.7, 0.85, 1.0);
-  vec3 tint = mix(warm, cool, hash(cellId + 5.1));
-  return tint * particle * (0.35 + h0 * 0.65);
-}
-
-// Tiny light streaks — grain-scale sparkle around the pin, not film grain.
-vec3 applyAnamorphicStreaks(vec2 uv, vec3 rgb) {
-  if (uLongAmt <= 0.1) return rgb;
-
-  float str = uLongAmt / 100.0;
-  float ang = uLongDir * 0.0174533;
-  vec2 dirPx = normalize(vec2(cos(ang) * uResolution.x, sin(ang) * uResolution.y));
-  vec2 perpPx = vec2(-dirPx.y, dirPx.x);
-
-  float zone = exp(-pow(distance(uv, uLongCenter) / 0.38, 2.0));
-  zone = mix(0.28, 1.0, zone);
-
-  vec2 px = uv * uResolution;
-  float pixL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-  float lift = mix(0.5, 1.0, pixL);
-
-  vec3 streakAdd = vec3(0.0);
-  for (int layer = 0; layer < 3; layer++) {
-    float cellSize = layer == 0 ? 9.0 : (layer == 1 ? 15.0 : 24.0);
-    vec2 cell = floor(px / cellSize);
-    for (int j = -1; j <= 1; j++) {
-      for (int i = -1; i <= 1; i++) {
-        vec2 cid = cell + vec2(float(i), float(j));
-        streakAdd += microStreakAt(px, dirPx, perpPx, cid, cellSize, str);
-      }
-    }
-  }
-
-  rgb += streakAdd * str * zone * lift * 0.95;
-  return clamp(rgb, 0.0, 1.0);
 }
 
 float linearMaskWeight(vec2 uv) {
@@ -527,10 +465,6 @@ void main() {
       vec3 blurred = gaussianSoft(uv, radius);
       rgb = mix(rgb, blurred, clamp(blurAmt, 0.0, 1.0));
     }
-  }
-
-  if (uLongAmt > 0.1) {
-    rgb = applyAnamorphicStreaks(uv, rgb);
   }
 
   if (uVigStrength > 0.1) {

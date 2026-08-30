@@ -40,16 +40,6 @@ export function PreviewStage({ rendererRef, exporting = false, exportingRef }: P
   const pins: PinDef[] = [];
   const pinMedia = hasMedia;
 
-  if (pinMedia && section === 'film' && filmSub === 'anamorphic') {
-    pins.push({
-      id: 'anamorphic',
-      x: params.longExposureCenter.x,
-      y: params.longExposureCenter.y,
-      title: 'Streak focus',
-      onMove: (x, y) => patchParams({ longExposureCenter: { x, y } }),
-    });
-  }
-
   if (pinMedia && section === 'film' && filmSub === 'bokeh') {
     pins.push({
       id: 'bokeh',
