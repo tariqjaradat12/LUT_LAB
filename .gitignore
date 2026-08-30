@@ -69,6 +69,7 @@ jdk*.msi
 .env
 .env.*
 !.env.example
+.user-pages-deploy-key/
 
 # Ruby / CocoaPods
 **/Pods/

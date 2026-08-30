@@ -31,12 +31,15 @@ You have **two paths that work**:
 5. Set a GitHub repo variable **`VITE_BASE`** = `/` (Settings → Secrets and variables → Actions → Variables)
 6. Push to `main` to redeploy
 
-### Option B — User GitHub Pages (free, no custom domain)
+### Option B — User GitHub Pages (free) **← current plan**
 
-1. Create a **new** GitHub repo named exactly: `tariqjaradat12.github.io`
-2. Enable Pages on that repo (Deploy from branch `gh-pages`)
-3. Change Lut Lab’s deploy to publish there with site root `/` (site URL becomes `https://tariqjaradat12.github.io/`)
-4. In AdSense, add: `tariqjaradat12.github.io`
+Lut Lab deploys to **`https://tariqjaradat12.github.io/`** (site root) for AdSense.
+
+**One-time setup:** follow **[docs/USER_PAGES_SETUP.md](docs/USER_PAGES_SETUP.md)** (create repo, deploy key, secret).
+
+In AdSense, add: **`tariqjaradat12.github.io`**
+
+The old URL `…/LUT_LAB/` stays as a mirror until you stop using it.
 
 ---
 

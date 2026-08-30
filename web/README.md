@@ -4,7 +4,8 @@ Browser photo editor — grade locally, nothing uploads to a server.
 
 ## Live site
 
-**https://tariqjaradat12.github.io/LUT_LAB/**
+**Primary:** https://tariqjaradat12.github.io/ (after [user Pages setup](docs/USER_PAGES_SETUP.md))  
+**Legacy mirror:** https://tariqjaradat12.github.io/LUT_LAB/
 
 ## Enable hosting (one-time, ~30 seconds)
 

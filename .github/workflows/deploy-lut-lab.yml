@@ -23,23 +23,41 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Build Lut Lab
+      - name: Build for tariqjaradat12.github.io (site root)
         working-directory: web
         env:
-          VITE_BASE: ${{ vars.VITE_BASE || '/LUT_LAB/' }}
+          VITE_BASE: /
           VITE_ADSENSE_SLOT: ${{ secrets.VITE_ADSENSE_SLOT }}
         run: |
           npm ci
           npm run build
           touch dist/.nojekyll
           cp dist/index.html dist/404.html
-          if [ -n "${{ vars.CUSTOM_DOMAIN }}" ]; then
-            echo "${{ vars.CUSTOM_DOMAIN }}" > dist/CNAME
-          fi
+          cp -r dist ../dist-root
 
-      - name: Publish to gh-pages branch
+      - name: Build legacy mirror for /LUT_LAB/
+        working-directory: web
+        env:
+          VITE_BASE: /LUT_LAB/
+          VITE_ADSENSE_SLOT: ${{ secrets.VITE_ADSENSE_SLOT }}
+        run: |
+          npm run build
+          touch dist/.nojekyll
+          cp dist/index.html dist/404.html
+
+      - name: Publish to tariqjaradat12.github.io
+        if: ${{ secrets.GH_PAGES_DEPLOY_KEY != '' }}
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}
+          external_repository: tariqjaradat12/tariqjaradat12.github.io
+          publish_branch: gh-pages
+          publish_dir: ./dist-root
+          commit_message: 'Deploy Lut Lab to user site'
+
+      - name: Publish legacy mirror to LUT_LAB gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./web/dist
-          commit_message: 'Deploy Lut Lab site'
+          commit_message: 'Deploy Lut Lab legacy mirror'
