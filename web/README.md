@@ -25,18 +25,19 @@ npm run dev
 
 Open http://localhost:5173
 
-## Google AdSense (optional)
+## Google AdSense
 
-Ads only appear in the **tool panel footer** — never on the preview canvas or over your photo/video.
+Your publisher ID (`ca-pub-8588643882726955`) is in `index.html` and `src/lib/adsConfig.ts`.
 
-1. Get approved at [Google AdSense](https://adsense.google.com)
-2. Copy `web/.env.example` to `web/.env`
-3. Set `VITE_ADSENSE_CLIENT` (e.g. `ca-pub-…`) and `VITE_ADSENSE_SLOT`
-4. Rebuild and deploy
+To show ads in the tool panel footer:
 
-For GitHub Pages, add repo secrets `VITE_ADSENSE_CLIENT` and `VITE_ADSENSE_SLOT` (Settings → Secrets → Actions).
+1. In [AdSense](https://adsense.google.com) go to **Ads → By ad unit → Display ad**
+2. Create a responsive display unit for Lut Lab
+3. Copy the number from `data-ad-slot="…"` in the code Google gives you
+4. Add GitHub repo secret **`VITE_ADSENSE_SLOT`** (Settings → Secrets → Actions) with that number
+5. Redeploy (push to `main` or re-run the Deploy workflow)
 
-Leave the vars empty to ship with no ads.
+For local dev, put the same value in `web/.env` as `VITE_ADSENSE_SLOT=your_slot_number`.
 
 ## Custom domain (optional)
 

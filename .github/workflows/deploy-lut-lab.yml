@@ -27,7 +27,6 @@ jobs:
         working-directory: web
         env:
           VITE_BASE: /LUT_LAB/
-          VITE_ADSENSE_CLIENT: ${{ secrets.VITE_ADSENSE_CLIENT }}
           VITE_ADSENSE_SLOT: ${{ secrets.VITE_ADSENSE_SLOT }}
         run: |
           npm ci
