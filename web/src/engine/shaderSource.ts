@@ -15,6 +15,7 @@ uniform sampler2D uImage;
 uniform sampler2D uBlend;
 uniform int uHasBlend;
 uniform vec2 uResolution;
+uniform vec2 uSourceResolution;
 
 uniform float uExposure;
 uniform float uBrightness;
@@ -217,7 +218,7 @@ vec3 sampleImg(vec2 uv) {
 }
 
 vec3 gaussianSoft(vec2 uv, float radiusPx) {
-  vec2 px = radiusPx / uResolution;
+  vec2 px = radiusPx / uSourceResolution;
   vec3 acc = vec3(0.0);
   float wSum = 0.0;
   for (int x = -4; x <= 4; x++) {
@@ -236,7 +237,7 @@ vec3 applySoftness(vec2 uv, vec3 rgb) {
 
   float t = uSoftness / 100.0;
   float amount = t * (2.0 - t);
-  float minRes = min(uResolution.x, uResolution.y);
+  float minRes = min(uSourceResolution.x, uSourceResolution.y);
   float radiusPx = mix(4.0, minRes * 0.04, amount);
 
   vec3 blurred = gaussianSoft(uv, radiusPx);
@@ -247,7 +248,7 @@ vec3 applySoftness(vec2 uv, vec3 rgb) {
 
   if (amount > 0.2) {
     float pixL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-    float grain = (softNoise(uv * uResolution * 0.5) - 0.5) * amount * 0.028;
+    float grain = (softNoise(uv * uSourceResolution * 0.5) - 0.5) * amount * 0.028;
     rgb += vec3(grain) * mix(0.4, 1.0, pixL);
   }
 
@@ -256,7 +257,7 @@ vec3 applySoftness(vec2 uv, vec3 rgb) {
 
 vec3 edgeAwareDenoise(vec2 uv, vec3 center, float strength, int colorOnly) {
   if (strength <= 0.001) return center;
-  vec2 px = 1.2 / uResolution;
+  vec2 px = 1.2 / uSourceResolution;
   vec3 acc = center;
   float wSum = 1.0;
   float cLuma = dot(center, vec3(0.2126, 0.7152, 0.0722));
@@ -405,7 +406,7 @@ void main() {
   }
 
   if (abs(uDefinition) > 0.1) {
-    vec2 px = 1.0 / uResolution;
+    vec2 px = 1.0 / uSourceResolution;
     vec3 blur = (
       sampleImg(uv + vec2(px.x, 0.0)) +
       sampleImg(uv - vec2(px.x, 0.0)) +
@@ -416,7 +417,7 @@ void main() {
   }
 
   if (uSharpen > 0.1) {
-    vec2 px = 1.0 / uResolution;
+    vec2 px = 1.0 / uSourceResolution;
     vec3 near = (
       sampleImg(uv + vec2(px.x, 0.0)) +
       sampleImg(uv - vec2(px.x, 0.0)) +
@@ -475,7 +476,7 @@ void main() {
 
   if (uGrainAmount > 0.1) {
     float scale = max(uGrainSize, 0.5) * 0.55;
-    vec2 gp = uv * uResolution * 0.35 / scale;
+    vec2 gp = uv * uSourceResolution * 0.35 / scale;
     float n = softNoise(gp);
     n = mix(n, softNoise(gp * 2.1 + 7.3), 0.35);
     n = mix(n, hash(floor(gp * 0.5)), uGrainRough * 0.25);

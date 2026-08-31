@@ -85,7 +85,7 @@ export class GradeRenderer {
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
     const names = [
-      'uImage', 'uBlend', 'uHasBlend', 'uResolution',
+      'uImage', 'uBlend', 'uHasBlend', 'uResolution', 'uSourceResolution',
       'uExposure', 'uBrightness', 'uContrast', 'uHighlights', 'uShadows',
       'uSaturation', 'uVibrance', 'uTemperature', 'uTint', 'uHue', 'uBw', 'uColorGrade',
       'uCurveAtlas', 'uCurvesEnabled',
@@ -283,6 +283,7 @@ export class GradeRenderer {
     const L = this.locs;
     gl.uniform1i(L.uHasBlend, this.hasBlend ? 1 : 0);
     gl.uniform2f(L.uResolution, this.canvas.width, this.canvas.height);
+    gl.uniform2f(L.uSourceResolution, this.imageSize.w, this.imageSize.h);
     gl.uniform1f(L.uExposure, p.exposure);
     gl.uniform1f(L.uBrightness, p.brightness);
     gl.uniform1f(L.uContrast, p.contrast);

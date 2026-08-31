@@ -305,7 +305,7 @@ async function exportWithMediabunny(options: {
   const decodeCanvas = document.createElement('canvas');
   decodeCanvas.width = w;
   decodeCanvas.height = h;
-  const decodeCtx = decodeCanvas.getContext('2d', { alpha: false });
+  const decodeCtx = decodeCanvas.getContext('2d', { alpha: false, colorSpace: 'srgb' });
   if (!decodeCtx) {
     throw new Error('Could not allocate a decode canvas for export.');
   }
