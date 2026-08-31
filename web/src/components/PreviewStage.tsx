@@ -40,6 +40,16 @@ export function PreviewStage({ rendererRef, exporting = false, exportingRef }: P
   const pins: PinDef[] = [];
   const pinMedia = hasMedia;
 
+  if (pinMedia && section === 'film' && filmSub === 'vignette') {
+    pins.push({
+      id: 'vignette',
+      x: params.vignetteCenter.x,
+      y: params.vignetteCenter.y,
+      title: 'Vignette center',
+      onMove: (x, y) => patchParams({ vignetteCenter: { x, y } }),
+    });
+  }
+
   if (pinMedia && section === 'film' && filmSub === 'bokeh') {
     pins.push({
       id: 'bokeh',
@@ -201,6 +211,77 @@ export function PreviewStage({ rendererRef, exporting = false, exportingRef }: P
     };
   }, [exporting, rendererRef, exportingRef]);
 
+  const dxGestureActive = hasMedia && section === 'double' && params.doubleExposureEnabled && !!blendBitmap;
+  const dxPointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const dxDragRef = useRef<{ lastX: number; lastY: number } | null>(null);
+  const dxPinchRef = useRef<{ dist: number; scale: number } | null>(null);
+  const paramsRef = useRef(params);
+  paramsRef.current = params;
+
+  const pointerDistance = (pts: { x: number; y: number }[]) =>
+    Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+
+  const onDxPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dxGestureActive) return;
+    if ((e.target as HTMLElement).closest('.hal-pin')) return;
+    const frame = e.currentTarget;
+    dxPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (dxPointersRef.current.size === 1) {
+      dxDragRef.current = { lastX: e.clientX, lastY: e.clientY };
+      dxPinchRef.current = null;
+      frame.setPointerCapture(e.pointerId);
+    } else if (dxPointersRef.current.size === 2) {
+      dxDragRef.current = null;
+      const pts = [...dxPointersRef.current.values()];
+      dxPinchRef.current = {
+        dist: Math.max(pointerDistance(pts), 1),
+        scale: paramsRef.current.doubleExposureScale,
+      };
+    }
+    e.preventDefault();
+  };
+
+  const onDxPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dxGestureActive || !dxPointersRef.current.has(e.pointerId)) return;
+    const frame = e.currentTarget;
+    const rect = frame.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+
+    dxPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const p = paramsRef.current;
+
+    if (dxPointersRef.current.size === 2 && dxPinchRef.current) {
+      const pts = [...dxPointersRef.current.values()];
+      const dist = Math.max(pointerDistance(pts), 1);
+      const ratio = dist / dxPinchRef.current.dist;
+      const scale = Math.min(3, Math.max(0.25, dxPinchRef.current.scale * ratio));
+      patchParams({ doubleExposureScale: scale });
+    } else if (dxPointersRef.current.size === 1 && dxDragRef.current) {
+      const dx = (e.clientX - dxDragRef.current.lastX) / rect.width;
+      const dy = (e.clientY - dxDragRef.current.lastY) / rect.height;
+      dxDragRef.current = { lastX: e.clientX, lastY: e.clientY };
+      patchParams({
+        doubleExposureOffset: {
+          x: Math.min(0.75, Math.max(-0.75, p.doubleExposureOffset.x + dx)),
+          y: Math.min(0.75, Math.max(-0.75, p.doubleExposureOffset.y + dy)),
+        },
+      });
+    }
+    e.preventDefault();
+  };
+
+  const onDxPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    dxPointersRef.current.delete(e.pointerId);
+    if (dxPointersRef.current.size < 2) dxPinchRef.current = null;
+    if (dxPointersRef.current.size === 1) {
+      const remaining = [...dxPointersRef.current.values()][0];
+      if (remaining) dxDragRef.current = { lastX: remaining.x, lastY: remaining.y };
+    } else {
+      dxDragRef.current = null;
+    }
+  };
+
   const onPinPointer = (pin: PinDef) => (e: ReactPointerEvent<HTMLDivElement>) => {
     const frame = e.currentTarget.parentElement;
     if (!frame) return;
@@ -232,7 +313,15 @@ export function PreviewStage({ rendererRef, exporting = false, exportingRef }: P
           <p>Grade locally in the browser. Nothing leaves your device.</p>
         </div>
       )}
-      <div className="stage-frame" style={{ display: hasMedia ? 'block' : 'none' }} data-editing={hasMedia || undefined}>
+      <div
+        className={`stage-frame${dxGestureActive ? ' stage-frame--dx' : ''}`}
+        style={{ display: hasMedia ? 'block' : 'none' }}
+        data-editing={hasMedia || undefined}
+        onPointerDown={onDxPointerDown}
+        onPointerMove={onDxPointerMove}
+        onPointerUp={onDxPointerUp}
+        onPointerCancel={onDxPointerUp}
+      >
         <canvas ref={canvasRef} />
         {pins.map((pin) => (
           <div

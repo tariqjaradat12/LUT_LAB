@@ -74,6 +74,7 @@ export interface EditParams {
   vignetteStrength: number;
   vignetteRadius: number;
   vignetteSoftness: number;
+  vignetteCenter: Point2D;
   grainAmount: number;
   grainSize: number;
   grainRoughness: number;
@@ -92,6 +93,7 @@ export interface EditParams {
   doubleExposureEnabled: boolean;
   doubleExposureOpacity: number;
   doubleExposureOffset: Point2D;
+  doubleExposureScale: number;
   doubleExposureBlend: DoubleExposureBlend;
   lutIntensity: number;
   lutColorOffset: number;
@@ -146,6 +148,7 @@ export const DEFAULT_EDIT_PARAMS: EditParams = {
   vignetteStrength: 0,
   vignetteRadius: 0.7,
   vignetteSoftness: 0.5,
+  vignetteCenter: { x: 0.5, y: 0.5 },
   grainAmount: 0,
   grainSize: 2.5,
   grainRoughness: 0.45,
@@ -164,6 +167,7 @@ export const DEFAULT_EDIT_PARAMS: EditParams = {
   doubleExposureEnabled: false,
   doubleExposureOpacity: 0.5,
   doubleExposureOffset: { x: 0, y: 0 },
+  doubleExposureScale: 1,
   doubleExposureBlend: 'additive',
   lutIntensity: 100,
   lutColorOffset: 0,

@@ -91,12 +91,12 @@ export class GradeRenderer {
       'uCurveAtlas', 'uCurvesEnabled',
       'uHslH', 'uHslS', 'uHslL',
       'uSharpen', 'uDefinition', 'uSoftness', 'uDenoiseL', 'uDenoiseC',
-      'uVigStrength', 'uVigRadius', 'uVigSoft',
+      'uVigStrength', 'uVigRadius', 'uVigSoft', 'uVigCenter',
       'uGrainAmount', 'uGrainSize', 'uGrainRough',
       'uBokehStrength', 'uBokehAperture', 'uBokehCenter',
       'uLinMask', 'uLinStart', 'uLinEnd', 'uLinFeather', 'uCircMask', 'uCircCenter', 'uCircRadius',
       'uMaskExposure', 'uMaskSat',
-      'uDxEnabled', 'uDxOpacity', 'uDxOffset', 'uDxBlend',
+      'uDxEnabled', 'uDxOpacity', 'uDxOffset', 'uDxScale', 'uDxBlend',
       'uLut', 'uHasLut', 'uLutSize', 'uLutIntensity', 'uLutColorOffset', 'uLutToneOffset',
       'uLogToRec709',
     ];
@@ -316,6 +316,7 @@ export class GradeRenderer {
     gl.uniform1f(L.uVigStrength, p.vignetteStrength);
     gl.uniform1f(L.uVigRadius, p.vignetteRadius);
     gl.uniform1f(L.uVigSoft, p.vignetteSoftness);
+    gl.uniform2f(L.uVigCenter, p.vignetteCenter.x, p.vignetteCenter.y);
     gl.uniform1f(L.uGrainAmount, p.grainAmount);
     gl.uniform1f(L.uGrainSize, p.grainSize);
     gl.uniform1f(L.uGrainRough, p.grainRoughness);
@@ -334,6 +335,7 @@ export class GradeRenderer {
     gl.uniform1i(L.uDxEnabled, p.doubleExposureEnabled ? 1 : 0);
     gl.uniform1f(L.uDxOpacity, p.doubleExposureOpacity);
     gl.uniform2f(L.uDxOffset, p.doubleExposureOffset.x, p.doubleExposureOffset.y);
+    gl.uniform1f(L.uDxScale, p.doubleExposureScale);
     gl.uniform1i(L.uDxBlend, BLEND_MODE_INDEX[p.doubleExposureBlend]);
     gl.uniform1i(L.uHasLut, this.hasLut ? 1 : 0);
     gl.uniform1f(L.uLutSize, this.lutSize);

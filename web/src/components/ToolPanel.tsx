@@ -150,6 +150,7 @@ export function ToolPanel({ exporting = false }: ToolPanelProps) {
             </div>
             {filmSub === 'vignette' && (
               <>
+                <p className="hint">Drag the plus to set where the vignette is centered.</p>
                 <Slider label="Strength" value={params.vignetteStrength} min={0} max={100} onChange={(v) => setParam('vignetteStrength', v)} format={pct} />
                 <Slider label="Radius" value={params.vignetteRadius} min={0.1} max={1} step={0.01} onChange={(v) => setParam('vignetteRadius', v)} format={(v) => v.toFixed(2)} />
                 <Slider label="Softness" value={params.vignetteSoftness} min={0.05} max={1} step={0.01} onChange={(v) => setParam('vignetteSoftness', v)} format={(v) => v.toFixed(2)} />
@@ -187,6 +188,7 @@ export function ToolPanel({ exporting = false }: ToolPanelProps) {
         {section === 'double' && (
           <>
             <Toggle label="Enable" value={params.doubleExposureEnabled} onChange={(v) => setParam('doubleExposureEnabled', v)} />
+            <p className="hint">Drag on the image to move the blend photo. Pinch to resize it.</p>
             <label className="btn file-btn" style={{ marginBottom: '0.75rem' }}>
               {blendBitmap ? 'Change blend photo' : 'Select blend photo'}
               <input
@@ -217,24 +219,14 @@ export function ToolPanel({ exporting = false }: ToolPanelProps) {
               ))}
             </div>
             <Slider label="Opacity" value={params.doubleExposureOpacity} min={0} max={1} step={0.01} onChange={(v) => setParam('doubleExposureOpacity', v)} format={(v) => `${Math.round(v * 100)}%`} />
-            <Slider
-              label="Shift X"
-              value={params.doubleExposureOffset.x}
-              min={-0.5}
-              max={0.5}
-              step={0.01}
-              onChange={(v) => patchParams({ doubleExposureOffset: { ...params.doubleExposureOffset, x: v } })}
-              format={(v) => v.toFixed(2)}
-            />
-            <Slider
-              label="Shift Y"
-              value={params.doubleExposureOffset.y}
-              min={-0.5}
-              max={0.5}
-              step={0.01}
-              onChange={(v) => patchParams({ doubleExposureOffset: { ...params.doubleExposureOffset, y: v } })}
-              format={(v) => v.toFixed(2)}
-            />
+            <button
+              type="button"
+              className="btn"
+              style={{ marginBottom: '0.75rem' }}
+              onClick={() => patchParams({ doubleExposureOffset: { x: 0, y: 0 }, doubleExposureScale: 1 })}
+            >
+              Reset position &amp; size
+            </button>
           </>
         )}
       </div>

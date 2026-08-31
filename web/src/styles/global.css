@@ -174,6 +174,14 @@ button {
   touch-action: none;
 }
 
+.stage-frame--dx {
+  cursor: grab;
+}
+
+.stage-frame--dx:active {
+  cursor: grabbing;
+}
+
 .stage canvas {
   display: block;
   max-width: 100%;

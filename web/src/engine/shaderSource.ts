@@ -45,6 +45,7 @@ uniform float uDenoiseC;
 uniform float uVigStrength;
 uniform float uVigRadius;
 uniform float uVigSoft;
+uniform vec2 uVigCenter;
 
 uniform float uGrainAmount;
 uniform float uGrainSize;
@@ -67,6 +68,7 @@ uniform float uMaskSat;
 uniform int uDxEnabled;
 uniform float uDxOpacity;
 uniform vec2 uDxOffset;
+uniform float uDxScale;
 uniform int uDxBlend;
 
 uniform sampler2D uLut;
@@ -228,27 +230,25 @@ vec3 gaussianSoft(vec2 uv, float radiusPx) {
   return acc / wSum;
 }
 
-// Dreamy soft focus: gentle blur with capped strength so high slider values stay natural.
+// Dreamy soft focus: blur the graded image with a visible, capped strength curve.
 vec3 applySoftness(vec2 uv, vec3 rgb) {
-  if (uSoftness <= 0.5) return rgb;
+  if (uSoftness <= 0.01) return rgb;
 
   float t = uSoftness / 100.0;
-  float amount = t * (2.0 - t) * 0.72;
+  float amount = t * (2.0 - t);
   float minRes = min(uResolution.x, uResolution.y);
-  float radiusPx = amount * minRes * 0.005 + 1.0;
+  float radiusPx = mix(4.0, minRes * 0.04, amount);
 
   vec3 blurred = gaussianSoft(uv, radiusPx);
-  vec3 blurredFine = gaussianSoft(uv, radiusPx * 0.55);
-  vec3 blur = mix(blurred, blurredFine, 0.35);
+  vec3 finer = gaussianSoft(uv, radiusPx * 0.5);
+  vec3 blur = mix(blurred, finer, 0.35);
 
-  float pixL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-  float blurL = max(dot(blur, vec3(0.2126, 0.7152, 0.0722)), 0.001);
-  vec3 soft = mix(rgb, blur * (pixL / blurL), 0.62);
-  rgb = mix(rgb, soft, amount);
+  rgb = mix(rgb, blur, amount * 0.88);
 
-  if (t > 0.2 && t < 0.82) {
-    float grain = (softNoise(uv * uResolution * 0.52) - 0.5) * t * 0.035;
-    rgb += vec3(grain) * mix(0.45, 1.0, pixL);
+  if (amount > 0.2) {
+    float pixL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+    float grain = (softNoise(uv * uResolution * 0.5) - 0.5) * amount * 0.028;
+    rgb += vec3(grain) * mix(0.4, 1.0, pixL);
   }
 
   return clamp(rgb, 0.0, 1.0);
@@ -426,8 +426,8 @@ void main() {
     rgb += (rgb - near) * (uSharpen / 50.0);
   }
 
-  // Softness — dreamy luma blur + fine grain (not blocky RGB mix)
-  if (uSoftness > 0.5) {
+  // Softness — dreamy blur
+  if (uSoftness > 0.01) {
     rgb = applySoftness(uv, rgb);
   }
 
@@ -468,7 +468,7 @@ void main() {
   }
 
   if (uVigStrength > 0.1) {
-    float v = distance(uv, vec2(0.5));
+    float v = distance(uv, uVigCenter);
     float vig = smoothstep(uVigRadius, uVigRadius - uVigSoft - 0.001, v);
     rgb *= mix(1.0, vig, uVigStrength / 100.0);
   }
@@ -486,7 +486,9 @@ void main() {
   }
 
   if (uDxEnabled == 1 && uHasBlend == 1) {
-    vec2 bUv = clamp(uv + uDxOffset, 0.0, 1.0);
+    float scale = max(uDxScale, 0.15);
+    vec2 bUv = (uv - 0.5 - uDxOffset) / scale + 0.5;
+    bUv = clamp(bUv, 0.0, 1.0);
     vec4 blend = texture2D(uBlend, bUv);
     vec3 mixed = blendDx(rgb, blend.rgb, uDxBlend);
     rgb = mix(rgb, clamp(mixed, 0.0, 1.0), uDxOpacity * blend.a);
