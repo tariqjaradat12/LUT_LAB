@@ -80,6 +80,10 @@ uniform float uLutColorOffset;
 uniform float uLutToneOffset;
 uniform int uLogToRec709;
 
+uniform sampler2D uGradeTex;
+uniform int uPass; // 0 = color grade to FBO, 1 = detail + film finish
+uniform int uSampleGrade; // 1 = neighbor samples read graded FBO (pass 2)
+
 vec3 sampleLut(vec3 c) {
   float N = uLutSize;
   float invNN = 1.0 / (N * N);
@@ -217,6 +221,13 @@ vec3 sampleImg(vec2 uv) {
   return texture2D(uImage, clamp(uv, 0.0, 1.0)).rgb;
 }
 
+vec3 sampleNeighbor(vec2 uv) {
+  if (uSampleGrade == 1) {
+    return texture2D(uGradeTex, clamp(uv, 0.0, 1.0)).rgb;
+  }
+  return sampleImg(uv);
+}
+
 vec3 gaussianSoft(vec2 uv, float radiusPx) {
   vec2 px = radiusPx / uSourceResolution;
   vec3 acc = vec3(0.0);
@@ -224,7 +235,7 @@ vec3 gaussianSoft(vec2 uv, float radiusPx) {
   for (int x = -4; x <= 4; x++) {
     for (int y = -4; y <= 4; y++) {
       float w = exp(-float(x * x + y * y) / 12.0);
-      acc += sampleImg(uv + vec2(float(x), float(y)) * px) * w;
+      acc += sampleNeighbor(uv + vec2(float(x), float(y)) * px) * w;
       wSum += w;
     }
   }
@@ -264,7 +275,7 @@ vec3 edgeAwareDenoise(vec2 uv, vec3 center, float strength, int colorOnly) {
   for (int i = 0; i < 8; i++) {
     float ang = float(i) * 0.785398;
     vec2 off = vec2(cos(ang), sin(ang)) * px * (1.0 + float(i) * 0.15);
-    vec3 n = sampleImg(uv + off);
+    vec3 n = sampleNeighbor(uv + off);
     float nLuma = dot(n, vec3(0.2126, 0.7152, 0.0722));
     float diff = colorOnly == 1
       ? length((n - center) - vec3(nLuma - cLuma))
@@ -355,8 +366,7 @@ vec3 logToRec709(vec3 logRgb) {
   return clamp(rec, 0.0, 1.0);
 }
 
-void main() {
-  vec2 uv = vUv;
+vec3 colorGrade(vec2 uv) {
   vec3 rgb = sampleImg(uv);
 
   if (uLogToRec709 == 1) {
@@ -381,7 +391,6 @@ void main() {
   rgb.b -= uTemperature / 200.0;
   rgb.g += uTint / 250.0;
 
-  // Skip HSV round-trips when color tools are at defaults (keeps import looking identical).
   if (uColorGrade == 1) {
     vec3 hsv = rgb2hsv(clamp(rgb, 0.0, 1.0));
     hsv.x = fract(hsv.x + uHue / 360.0);
@@ -398,20 +407,23 @@ void main() {
   }
 
   if (uCurvesEnabled == 1) {
-    // High-res LUT tone curve. Master applies the same map to R/G/B (standard RGB curves).
     vec3 c = clamp(rgb, 0.0, 1.0);
     c = vec3(sampleCurve(0.0, c.r), sampleCurve(0.0, c.g), sampleCurve(0.0, c.b));
     c = vec3(sampleCurve(1.0, c.r), sampleCurve(2.0, c.g), sampleCurve(3.0, c.b));
     rgb = clamp(c, 0.0, 1.0);
   }
 
+  return clamp(rgb, 0.0, 1.0);
+}
+
+vec3 applyDetailEffects(vec2 uv, vec3 rgb) {
   if (abs(uDefinition) > 0.1) {
     vec2 px = 1.0 / uSourceResolution;
     vec3 blur = (
-      sampleImg(uv + vec2(px.x, 0.0)) +
-      sampleImg(uv - vec2(px.x, 0.0)) +
-      sampleImg(uv + vec2(0.0, px.y)) +
-      sampleImg(uv - vec2(0.0, px.y))
+      sampleNeighbor(uv + vec2(px.x, 0.0)) +
+      sampleNeighbor(uv - vec2(px.x, 0.0)) +
+      sampleNeighbor(uv + vec2(0.0, px.y)) +
+      sampleNeighbor(uv - vec2(0.0, px.y))
     ) * 0.25;
     rgb = mix(rgb, rgb + (rgb - blur), uDefinition / 100.0);
   }
@@ -419,20 +431,18 @@ void main() {
   if (uSharpen > 0.1) {
     vec2 px = 1.0 / uSourceResolution;
     vec3 near = (
-      sampleImg(uv + vec2(px.x, 0.0)) +
-      sampleImg(uv - vec2(px.x, 0.0)) +
-      sampleImg(uv + vec2(0.0, px.y)) +
-      sampleImg(uv - vec2(0.0, px.y))
+      sampleNeighbor(uv + vec2(px.x, 0.0)) +
+      sampleNeighbor(uv - vec2(px.x, 0.0)) +
+      sampleNeighbor(uv + vec2(0.0, px.y)) +
+      sampleNeighbor(uv - vec2(0.0, px.y))
     ) * 0.25;
     rgb += (rgb - near) * (uSharpen / 50.0);
   }
 
-  // Softness — dreamy blur
   if (uSoftness > 0.01) {
     rgb = applySoftness(uv, rgb);
   }
 
-  // Edge-aware denoise (not plain blur)
   if (uDenoiseL > 0.5) {
     rgb = edgeAwareDenoise(uv, rgb, uDenoiseL / 100.0, 0);
   }
@@ -440,6 +450,21 @@ void main() {
     rgb = edgeAwareDenoise(uv, rgb, uDenoiseC / 100.0, 1);
   }
 
+  if (uBokehStrength > 0.001) {
+    float focusR = 0.018 + (uBokehAperture - 1.4) * 0.014;
+    float dist = distance(uv, uBokehCenter);
+    float blurAmt = smoothstep(focusR * 0.55, focusR + 0.12, dist) * (uBokehStrength / 100.0);
+    if (blurAmt > 0.005) {
+      float radius = blurAmt * 6.0;
+      vec3 blurred = gaussianSoft(uv, radius);
+      rgb = mix(rgb, blurred, clamp(blurAmt, 0.0, 1.0));
+    }
+  }
+
+  return clamp(rgb, 0.0, 1.0);
+}
+
+vec3 applyFilmEffects(vec2 uv, vec3 rgb) {
   float mask = 0.0;
   if (uLinMask == 1) {
     mask = max(mask, linearMaskWeight(uv));
@@ -454,18 +479,6 @@ void main() {
     mHsv.y = clamp(mHsv.y * (1.0 + uMaskSat / 100.0), 0.0, 1.0);
     masked = hsv2rgb(mHsv);
     rgb = mix(rgb, masked, mask);
-  }
-
-  // Bokeh — blur away from focus pin; wider aperture (lower f) = smaller sharp zone
-  if (uBokehStrength > 0.001) {
-    float focusR = 0.018 + (uBokehAperture - 1.4) * 0.014;
-    float dist = distance(uv, uBokehCenter);
-    float blurAmt = smoothstep(focusR * 0.55, focusR + 0.12, dist) * (uBokehStrength / 100.0);
-    if (blurAmt > 0.005) {
-      float radius = blurAmt * 6.0;
-      vec3 blurred = gaussianSoft(uv, radius);
-      rgb = mix(rgb, blurred, clamp(blurAmt, 0.0, 1.0));
-    }
   }
 
   if (uVigStrength > 0.1) {
@@ -495,6 +508,22 @@ void main() {
     rgb = mix(rgb, clamp(mixed, 0.0, 1.0), uDxOpacity * blend.a);
   }
 
-  gl_FragColor = vec4(clamp(rgb, 0.0, 1.0), 1.0);
+  return clamp(rgb, 0.0, 1.0);
+}
+
+void main() {
+  vec2 uv = vUv;
+
+  if (uPass == 0) {
+    gl_FragColor = vec4(colorGrade(uv), 1.0);
+    return;
+  }
+
+  vec3 rgb = uSampleGrade == 1
+    ? texture2D(uGradeTex, clamp(uv, 0.0, 1.0)).rgb
+    : colorGrade(uv);
+  rgb = applyDetailEffects(uv, rgb);
+  rgb = applyFilmEffects(uv, rgb);
+  gl_FragColor = vec4(rgb, 1.0);
 }
 `;

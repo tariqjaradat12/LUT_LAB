@@ -531,7 +531,8 @@ export async function exportGradedVideo(options: ExportGradedVideoArgs): Promise
   const wasRate = video.playbackRate;
   const sourceDuration = video.duration;
 
-  renderer.setParams(params);
+  renderer.setParams(params, { render: false });
+  renderer.setSourceFrame(video, w, h);
   canvas.width = w;
   canvas.height = h;
   if (canvas.width !== w || canvas.height !== h) {
