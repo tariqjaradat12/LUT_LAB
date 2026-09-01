@@ -44,17 +44,6 @@ function colorGradeActive(p: EditParams) {
   return false;
 }
 
-function needsDetailPass(p: EditParams) {
-  return (
-    p.sharpen > 0.1 ||
-    Math.abs(p.definition) > 0.1 ||
-    p.softness > 0.01 ||
-    p.denoiseLuminance > 0.5 ||
-    p.denoiseColor > 0.5 ||
-    p.bokehStrength > 0.001
-  );
-}
-
 export class GradeRenderer {
   private gl: WebGLRenderingContext;
   private program: WebGLProgram;
@@ -70,9 +59,6 @@ export class GradeRenderer {
   private imageSize = { w: 1, h: 1 };
   private locs: Record<string, WebGLUniformLocation | null> = {};
   private lastCurveKey = '';
-  private gradeFbo: WebGLFramebuffer | null = null;
-  private gradeTex: WebGLTexture | null = null;
-  private gradeTargetSize = { w: 0, h: 0 };
 
   constructor(private canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl', { preserveDrawingBuffer: true, alpha: false });
@@ -113,14 +99,12 @@ export class GradeRenderer {
       'uDxEnabled', 'uDxOpacity', 'uDxOffset', 'uDxScale', 'uDxBlend',
       'uLut', 'uHasLut', 'uLutSize', 'uLutIntensity', 'uLutColorOffset', 'uLutToneOffset',
       'uLogToRec709',
-      'uGradeTex', 'uPass', 'uSampleGrade',
     ];
     for (const n of names) this.locs[n] = gl.getUniformLocation(prog, n);
     gl.uniform1i(this.locs.uImage, 0);
     gl.uniform1i(this.locs.uBlend, 1);
     gl.uniform1i(this.locs.uLut, 2);
     gl.uniform1i(this.locs.uCurveAtlas, 3);
-    gl.uniform1i(this.locs.uGradeTex, 4);
     gl.clearColor(0, 0, 0, 1);
 
     this.curveTex = gl.createTexture();
@@ -362,59 +346,6 @@ export class GradeRenderer {
     gl.uniform1i(L.uLogToRec709, p.logToRec709 ? 1 : 0);
   }
 
-  private ensureGradeTarget(w: number, h: number) {
-    const gl = this.gl;
-    if (this.gradeTargetSize.w === w && this.gradeTargetSize.h === h && this.gradeFbo && this.gradeTex) {
-      return;
-    }
-    if (!this.gradeTex) this.gradeTex = gl.createTexture();
-    if (!this.gradeFbo) this.gradeFbo = gl.createFramebuffer();
-
-    gl.bindTexture(gl.TEXTURE_2D, this.gradeTex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.gradeFbo);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.gradeTex, 0);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.gradeTargetSize = { w, h };
-  }
-
-  private bindTextures() {
-    const gl = this.gl;
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.tex);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.hasBlend && this.blendTex ? this.blendTex : this.tex);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, this.hasLut && this.lutTex ? this.lutTex : this.tex);
-    gl.activeTexture(gl.TEXTURE3);
-    gl.bindTexture(gl.TEXTURE_2D, this.curveTex);
-    if (this.gradeTex) {
-      gl.activeTexture(gl.TEXTURE4);
-      gl.bindTexture(gl.TEXTURE_2D, this.gradeTex);
-    }
-  }
-
-  private drawInternal(pass: 0 | 1, sampleGrade: boolean, targetFramebuffer: WebGLFramebuffer | null) {
-    const gl = this.gl;
-    const L = this.locs;
-    const p = this.params!;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, targetFramebuffer);
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.useProgram(this.program);
-    gl.uniform1i(L.uPass, pass);
-    gl.uniform1i(L.uSampleGrade, sampleGrade ? 1 : 0);
-    this.applyUniforms(p);
-    this.bindTextures();
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  }
-
   getCanvas(): HTMLCanvasElement {
     return this.canvas;
   }
@@ -430,17 +361,22 @@ export class GradeRenderer {
 
   /** Draw current grade. When fitToStage is false, keep the current canvas buffer size (export). */
   draw(fitToStage: boolean) {
+    const gl = this.gl;
     if (!this.tex || !this.params) return;
     if (fitToStage) this.resize();
-
-    if (needsDetailPass(this.params)) {
-      this.ensureGradeTarget(this.canvas.width, this.canvas.height);
-      this.drawInternal(0, false, this.gradeFbo);
-      this.drawInternal(1, true, null);
-      return;
-    }
-
-    this.drawInternal(1, false, null);
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.clear(this.gl.COLOR_BUFFER_BIT);
+    gl.useProgram(this.program);
+    this.applyUniforms(this.params);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.tex);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.hasBlend && this.blendTex ? this.blendTex : this.tex);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.hasLut && this.lutTex ? this.lutTex : this.tex);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.curveTex);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
   exportToCanvas(maxEdge = 4096): HTMLCanvasElement {
@@ -474,8 +410,6 @@ export class GradeRenderer {
     if (this.blendTex) gl.deleteTexture(this.blendTex);
     if (this.lutTex) gl.deleteTexture(this.lutTex);
     if (this.curveTex) gl.deleteTexture(this.curveTex);
-    if (this.gradeTex) gl.deleteTexture(this.gradeTex);
-    if (this.gradeFbo) gl.deleteFramebuffer(this.gradeFbo);
     gl.deleteBuffer(this.buf);
     gl.deleteProgram(this.program);
   }
