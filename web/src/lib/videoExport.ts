@@ -203,7 +203,8 @@ async function canUseWebCodecsExport(width: number, height: number): Promise<boo
 
 /**
  * Frame-accurate MP4 export via WebCodecs.
- * Decodes with VideoSampleSink (not HTMLVideo seeks) so phones don't collapse to ~keyframe/5fps.
+ * Video frames are graded from the same <video> element as preview so HDR / Dolby Vision
+ * tone-mapping matches what you see while editing (decoder canvas can look very different).
  */
 async function exportWithMediabunny(options: {
   video: HTMLVideoElement;
@@ -302,26 +303,19 @@ async function exportWithMediabunny(options: {
   const sink = new VideoSampleSink(videoTrack);
   const firstTs = (await videoTrack.getFirstTimestamp()) || 0;
 
-  const decodeCanvas = document.createElement('canvas');
-  decodeCanvas.width = w;
-  decodeCanvas.height = h;
-  const decodeCtx = decodeCanvas.getContext('2d', { alpha: false, colorSpace: 'srgb' });
-  if (!decodeCtx) {
-    throw new Error('Could not allocate a decode canvas for export.');
-  }
-
+  video.pause();
   let encoded = 0;
   let havePicture = false;
 
   for (let i = 0; i < totalFrames; i++) {
-    const t = firstTs + Math.min(Math.max(0, sourceDuration - 1e-4), i * frameDt);
+    const mediaTime = Math.min(Math.max(0, sourceDuration - 1e-4), i * frameDt);
+    const t = firstTs + mediaTime;
     const sample = await sink.getSample(t);
     if (sample) {
-      decodeCtx.fillStyle = '#000';
-      decodeCtx.fillRect(0, 0, w, h);
-      sample.draw(decodeCtx, 0, 0, w, h);
       sample.close();
-      paintGradedFromSource(renderer, canvas, decodeCanvas, w, h);
+      await seekVideo(video, mediaTime);
+      await waitForDecodedFrame(video);
+      paintGradedFrame(video, renderer, canvas, w, h);
       renderer.flush();
       encodeCtx.drawImage(canvas, 0, 0, w, h);
       havePicture = true;
@@ -334,7 +328,7 @@ async function exportWithMediabunny(options: {
     const outTime = encoded * frameDt;
     await videoSource.add(outTime, frameDt, encoded === 0 ? { keyFrame: true } : undefined);
     encoded += 1;
-    onProgress?.(Math.min(sourceDuration, i * frameDt));
+    onProgress?.(mediaTime);
   }
 
   if (encoded === 0) {
