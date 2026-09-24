@@ -780,36 +780,6 @@ button {
   .lut-look { transition: none; }
 }
 
-/* AdSense — tool panel footer only (never on preview) */
-.ad-slot {
-  flex-shrink: 0;
-  padding: 0.45rem 0.75rem calc(0.45rem + var(--safe-bottom));
-  border-top: 1px solid var(--line);
-  background: var(--surface-2);
-  overflow: hidden;
-  text-align: center;
-}
-.ad-slot-label {
-  margin: 0 0 0.3rem;
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.ad-slot .adsbygoogle {
-  display: block;
-  min-height: 50px;
-  max-height: 90px;
-}
-.panel--luts .ad-slot {
-  background: #050505;
-  border-top-color: rgba(255, 255, 255, 0.1);
-}
-.panel--luts .ad-slot-label {
-  color: rgba(255, 255, 255, 0.35);
-}
-
 /* Phone / narrow screens */
 @media (max-width: 899px) {
   .topbar {

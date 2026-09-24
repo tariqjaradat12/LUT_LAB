@@ -2,7 +2,7 @@
 
 Do these steps once. After that, every push to `main` updates **both** URLs:
 
-- **Primary (AdSense):** https://tariqjaradat12.github.io/
+- **Primary:** https://tariqjaradat12.github.io/
 - **Legacy mirror:** https://tariqjaradat12.github.io/LUT_LAB/
 
 ---
@@ -66,18 +66,6 @@ The script prints:
 ## Step 4 — Trigger deploy
 
 Push any change to `main`, or run **Actions → Deploy Lut Lab → Run workflow**.
-
----
-
-## Step 5 — AdSense
-
-In AdSense → **Sites → Add site**, enter:
-
-```
-tariqjaradat12.github.io
-```
-
-Verify using the meta tag method. Your site URL is now **https://tariqjaradat12.github.io/** (no `/LUT_LAB`).
 
 ---
 

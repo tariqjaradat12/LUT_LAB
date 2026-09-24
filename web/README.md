@@ -26,18 +26,6 @@ npm run dev
 
 Open http://localhost:5173
 
-## Google AdSense
-
-**The AdSense “website” field needs a domain — not “Lut Lab”.**  
-See **[docs/ADSENSE_SETUP.md](docs/ADSENSE_SETUP.md)** for full steps.
-
-Quick summary:
-
-1. Try adding **`tariqjaradat12.github.io`** (no `https://`, no spaces, no app name).
-2. If Google rejects the `/LUT_LAB/` path, use a **custom domain** (best) or a **`tariqjaradat12.github.io`** user Pages repo at the site root.
-3. Verification tags and `ads.txt` are already in the build.
-4. Link to the **[privacy policy](https://tariqjaradat12.github.io/LUT_LAB/privacy.html)** is in the top bar.
-
 ## Custom domain (optional)
 
 In **Settings → Pages**, add a domain (e.g. `lutlab.app`) and point DNS to GitHub Pages.
