@@ -395,7 +395,7 @@ export class GradeRenderer {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  exportToCanvas(maxEdge = 4096): HTMLCanvasElement {
+  exportToCanvas(maxEdge = 8192): HTMLCanvasElement {
     if (!this.tex || !this.params) throw new Error('Nothing to export yet.');
     const scale = Math.min(1, maxEdge / Math.max(this.imageSize.w, this.imageSize.h));
     const w = Math.max(1, Math.round(this.imageSize.w * scale));

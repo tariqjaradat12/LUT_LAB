@@ -1,5 +1,8 @@
-/** Longest edge for the working bitmap (preview + grade texture). Matches export cap. */
-export const MAX_IMAGE_EDGE = 4096;
+/**
+ * Absolute safety cap — only used when a photo exceeds what most GPUs allow
+ * as a WebGL texture (often 8192). Editing otherwise keeps original resolution.
+ */
+export const MAX_TEXTURE_EDGE = 8192;
 
 function fitWithinEdge(width: number, height: number, maxEdge: number) {
   const edge = Math.max(width, height);
@@ -9,18 +12,6 @@ function fitWithinEdge(width: number, height: number, maxEdge: number) {
     width: Math.max(1, Math.round(width * scale)),
     height: Math.max(1, Math.round(height * scale)),
   };
-}
-
-/** Prefer a smaller working size on low-memory / phone browsers. */
-function workingMaxEdge() {
-  const nav = navigator as Navigator & { deviceMemory?: number };
-  if (typeof nav.deviceMemory === 'number' && nav.deviceMemory > 0 && nav.deviceMemory <= 4) {
-    return 2048;
-  }
-  if (typeof window !== 'undefined' && window.innerWidth > 0 && window.innerWidth < 900) {
-    return 3072;
-  }
-  return MAX_IMAGE_EDGE;
 }
 
 async function decodeOriented(file: File): Promise<ImageBitmap> {
@@ -67,8 +58,9 @@ async function downscaleBitmap(source: ImageBitmap, width: number, height: numbe
 }
 
 /**
- * Decode a photo for editing. Large images are downscaled so WebGL stays responsive
- * (phones often choke on 40–100MP camera files).
+ * Decode a photo at original resolution for editing/export.
+ * Only downscales if larger than MAX_TEXTURE_EDGE (GPU limit).
+ * Avoids the old per-pixel getImageData scan that froze large files.
  */
 export async function loadImageFromFile(file: File): Promise<ImageBitmap> {
   if (!file.type.startsWith('image/')) {
@@ -76,8 +68,7 @@ export async function loadImageFromFile(file: File): Promise<ImageBitmap> {
   }
 
   let decoded = await decodeOriented(file);
-  const maxEdge = workingMaxEdge();
-  const fitted = fitWithinEdge(decoded.width, decoded.height, maxEdge);
+  const fitted = fitWithinEdge(decoded.width, decoded.height, MAX_TEXTURE_EDGE);
   if (fitted.width !== decoded.width || fitted.height !== decoded.height) {
     decoded = await downscaleBitmap(decoded, fitted.width, fitted.height);
   }
@@ -91,8 +82,7 @@ export async function loadImageFromFile(file: File): Promise<ImageBitmap> {
     throw new Error('Could not decode that photo.');
   }
 
-  // Composite over black (opaque) without a full getImageData scan — that loop
-  // freezes the tab on multi‑megapixel photos.
+  // Opaque composite without scanning every pixel (that froze multi‑MP photos).
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(decoded, 0, 0);
@@ -112,12 +102,9 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.download = filename;
   a.rel = 'noopener';
   a.style.display = 'none';
-  // Append before click — required for reliable downloads on mobile Chrome.
   document.body.appendChild(a);
   a.click();
   a.remove();
-  // Do not revoke immediately: phones often truncate the file if the blob URL
-  // is revoked before the download pipeline has finished reading it.
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
