@@ -75,7 +75,7 @@ export function EditProvider({ children }: { children: ReactNode }) {
   const [imageBitmap, setImageBitmap] = useState<ImageBitmap | null>(null);
   const [blendBitmap, setBlendBitmap] = useState<ImageBitmap | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [section, setSection] = useState<ToolSection>('light');
+  const [section, setSection] = useState<ToolSection>('luts');
   const [filmSub, setFilmSub] = useState<FilmSubTab>('vignette');
   const [presetLuts, setPresetLuts] = useState<ImportedLut[]>([]);
   const [presetsLoading, setPresetsLoading] = useState(true);

@@ -6,6 +6,7 @@ import { LutLooksPanel } from './LutLooksPanel';
 import { Slider, Toggle } from './Slider';
 
 const SECTIONS: { id: ToolSection; label: string }[] = [
+  { id: 'luts', label: 'LUTs' },
   { id: 'light', label: 'Light' },
   { id: 'color', label: 'Color' },
   { id: 'curves', label: 'Curves' },
@@ -14,7 +15,6 @@ const SECTIONS: { id: ToolSection; label: string }[] = [
   { id: 'film', label: 'Lens & Film' },
   { id: 'masks', label: 'Masks' },
   { id: 'double', label: 'Double exposure' },
-  { id: 'luts', label: 'LUTs' },
 ];
 
 const pct = (v: number) => `${Math.round(v)}`;
