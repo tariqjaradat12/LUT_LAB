@@ -33,7 +33,7 @@ export function LutLooksPanel() {
         <p className="lut-looks-status">Building film looks…</p>
       ) : (
         <div className="lut-looks-scroll">
-          {(['Fujifilm', 'Kodak'] as const).map((group) => (
+          {(['Fujifilm', 'Kodak', 'Leica'] as const).map((group) => (
             <section key={group} className="lut-looks-group">
               <h3 className="lut-looks-group-title">{group}</h3>
               <ul className="lut-looks-list">

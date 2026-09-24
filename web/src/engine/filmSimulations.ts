@@ -3,7 +3,7 @@ import type { ImportedLut } from './lutEngine';
 export type FilmPresetMeta = {
   id: string;
   name: string;
-  group: 'Fujifilm' | 'Kodak';
+  group: 'Fujifilm' | 'Kodak' | 'Leica';
 };
 
 /** Built-in film sims — tuned to camera/film looks; color/tone pad fine-tunes further. */
@@ -25,6 +25,23 @@ export const FILM_PRESET_META: FilmPresetMeta[] = [
   { id: 'preset_kodachrome_200', name: 'Kodachrome 200', group: 'Kodak' },
   { id: 'preset_ektar_100', name: 'Ektar 100', group: 'Kodak' },
   { id: 'preset_colorplus_200', name: 'ColorPlus 200', group: 'Kodak' },
+  // Leica Photo Styles / Leica Looks (Q / SL / M style profiles)
+  { id: 'preset_leica_vivid', name: 'Vivid', group: 'Leica' },
+  { id: 'preset_leica_natural', name: 'Natural', group: 'Leica' },
+  { id: 'preset_leica_mono_nat', name: 'Monochrome Nat', group: 'Leica' },
+  { id: 'preset_leica_mono_hc', name: 'Monochrome Contrast', group: 'Leica' },
+  { id: 'preset_leica_classic', name: 'Classic', group: 'Leica' },
+  { id: 'preset_leica_contemporary', name: 'Contemporary', group: 'Leica' },
+  { id: 'preset_leica_chrome', name: 'Chrome', group: 'Leica' },
+  { id: 'preset_leica_teal', name: 'Teal', group: 'Leica' },
+  { id: 'preset_leica_silver', name: 'Silver', group: 'Leica' },
+  { id: 'preset_leica_bleach', name: 'Bleach', group: 'Leica' },
+  { id: 'preset_leica_brass', name: 'Brass', group: 'Leica' },
+  { id: 'preset_leica_eternal', name: 'Eternal', group: 'Leica' },
+  { id: 'preset_leica_sepia', name: 'Sepia', group: 'Leica' },
+  { id: 'preset_leica_blue', name: 'Blue', group: 'Leica' },
+  { id: 'preset_leica_selenium', name: 'Selenium', group: 'Leica' },
+  { id: 'preset_leica_sienna', name: 'Sienna', group: 'Leica' },
 ];
 
 type HueBias = { center: number; width: number; sat?: number; shift?: number; lum?: number };
@@ -41,6 +58,10 @@ type FilmRecipe = {
   biases: HueBias[];
   mono?: boolean;
   monoWeights?: [number, number, number];
+  /** Post-mono RGB gain (sepia / blue / selenium toning) */
+  monoGain?: [number, number, number];
+  /** Post-mono RGB lift */
+  monoLift?: [number, number, number];
   /** Soft S-curve amount on luma (slide films / Acros) */
   sCurve?: number;
 };
@@ -339,6 +360,282 @@ const RECIPES: Record<string, FilmRecipe> = {
       { center: 0.0, width: 0.08, sat: 0.05 },
     ],
   },
+
+  // ——— Leica Photo Styles / Looks ———
+  // Camera “Vivid”: punchy sat + micro-contrast, clean Leica reds/blues
+  preset_leica_vivid: {
+    contrast: 1.2,
+    pivot: 0.46,
+    sat: 1.28,
+    lift: [-0.006, -0.004, 0.0],
+    gamma: [1.0, 0.98, 1.02],
+    gain: [1.04, 1.0, 1.05],
+    black: 0.018,
+    white: 0.975,
+    sCurve: 0.18,
+    biases: [
+      { center: 0.0, width: 0.09, sat: 0.18 },
+      { center: 0.58, width: 0.1, sat: 0.16, shift: 0.01 },
+      { center: 0.33, width: 0.09, sat: 0.1 },
+      { center: 0.04, width: 0.06, sat: 0.04, shift: -0.01 },
+    ],
+  },
+  // Camera “Natural”: gentle contrast, honest color, skin-friendly
+  preset_leica_natural: {
+    contrast: 0.96,
+    pivot: 0.5,
+    sat: 0.94,
+    lift: [0.008, 0.006, 0.004],
+    gamma: [0.99, 1.0, 1.01],
+    gain: [1.0, 1.0, 1.0],
+    black: 0.004,
+    white: 0.992,
+    sCurve: 0.05,
+    biases: [
+      { center: 0.04, width: 0.07, sat: -0.06, shift: 0.012, lum: 0.03 },
+      { center: 0.33, width: 0.09, sat: -0.04 },
+      { center: 0.58, width: 0.08, sat: 0.03 },
+    ],
+  },
+  // Monochrome Natural — smooth midtones, open shadows
+  preset_leica_mono_nat: {
+    contrast: 1.06,
+    pivot: 0.5,
+    sat: 0,
+    lift: [0, 0, 0],
+    gamma: [1, 1, 1],
+    gain: [1, 1, 1],
+    black: 0.008,
+    white: 0.99,
+    sCurve: 0.1,
+    mono: true,
+    monoWeights: [0.28, 0.58, 0.14],
+    biases: [],
+  },
+  // Monochrome High Contrast — deep blacks, crisp highlights
+  preset_leica_mono_hc: {
+    contrast: 1.32,
+    pivot: 0.44,
+    sat: 0,
+    lift: [0, 0, 0],
+    gamma: [1, 1, 1],
+    gain: [1, 1, 1],
+    black: 0.035,
+    white: 0.97,
+    sCurve: 0.26,
+    mono: true,
+    monoWeights: [0.22, 0.62, 0.16],
+    biases: [],
+  },
+  // Classic — muted vintage, warm amber mids, soft documentary
+  preset_leica_classic: {
+    contrast: 1.08,
+    pivot: 0.46,
+    sat: 0.74,
+    lift: [0.012, 0.008, -0.002],
+    gamma: [0.95, 0.99, 1.04],
+    gain: [1.04, 1.01, 0.94],
+    black: 0.02,
+    white: 0.985,
+    sCurve: 0.12,
+    biases: [
+      { center: 0.08, width: 0.1, sat: 0.04, shift: 0.02 },
+      { center: 0.0, width: 0.08, sat: -0.08 },
+      { center: 0.55, width: 0.1, sat: -0.1, shift: -0.02 },
+      { center: 0.33, width: 0.1, sat: -0.12, shift: 0.02 },
+    ],
+  },
+  // Contemporary — modern clean, slight cool shadows, crisp
+  preset_leica_contemporary: {
+    contrast: 1.12,
+    pivot: 0.48,
+    sat: 1.02,
+    lift: [0.0, 0.004, 0.012],
+    gamma: [1.01, 1.0, 0.98],
+    gain: [0.98, 1.0, 1.04],
+    black: 0.012,
+    white: 0.982,
+    sCurve: 0.14,
+    biases: [
+      { center: 0.58, width: 0.1, sat: 0.06, shift: -0.015 },
+      { center: 0.04, width: 0.07, sat: -0.04 },
+      { center: 0.33, width: 0.08, sat: 0.03 },
+    ],
+  },
+  // Chrome — slide-like punch, hard blacks, vivid primary colors
+  preset_leica_chrome: {
+    contrast: 1.26,
+    pivot: 0.45,
+    sat: 1.24,
+    lift: [-0.01, -0.006, 0.002],
+    gamma: [1.0, 0.98, 1.02],
+    gain: [1.05, 0.99, 1.04],
+    black: 0.028,
+    white: 0.968,
+    sCurve: 0.22,
+    biases: [
+      { center: 0.0, width: 0.09, sat: 0.2 },
+      { center: 0.58, width: 0.1, sat: 0.18 },
+      { center: 0.33, width: 0.09, sat: 0.12 },
+      { center: 0.12, width: 0.06, sat: 0.08 },
+    ],
+  },
+  // Teal — cinematic teal shadows / warm skin-oranges
+  preset_leica_teal: {
+    contrast: 1.1,
+    pivot: 0.48,
+    sat: 0.92,
+    lift: [-0.01, 0.012, 0.02],
+    gamma: [1.04, 1.0, 0.94],
+    gain: [1.06, 1.0, 0.96],
+    black: 0.015,
+    white: 0.985,
+    sCurve: 0.12,
+    biases: [
+      { center: 0.52, width: 0.12, sat: 0.14, shift: -0.05 }, // teal/cyan
+      { center: 0.06, width: 0.1, sat: 0.1, shift: 0.02 }, // warm orange
+      { center: 0.33, width: 0.09, sat: -0.14, shift: -0.02 },
+      { center: 0.0, width: 0.07, sat: -0.06 },
+    ],
+  },
+  // Silver — cool desaturated metallic, near-mono with blue-silver sheen
+  preset_leica_silver: {
+    contrast: 1.16,
+    pivot: 0.47,
+    sat: 0.28,
+    lift: [0.004, 0.008, 0.016],
+    gamma: [1.02, 1.0, 0.97],
+    gain: [0.96, 0.99, 1.06],
+    black: 0.02,
+    white: 0.98,
+    sCurve: 0.16,
+    biases: [
+      { center: 0.55, width: 0.12, sat: 0.08, shift: -0.02 },
+      { center: 0.08, width: 0.1, sat: -0.1 },
+      { center: 0.0, width: 0.08, sat: -0.12 },
+    ],
+  },
+  // Bleach — bleach-bypass: harsh contrast, drained color, silvery midtones
+  preset_leica_bleach: {
+    contrast: 1.34,
+    pivot: 0.42,
+    sat: 0.42,
+    lift: [0.006, 0.008, 0.01],
+    gamma: [1.04, 1.02, 1.0],
+    gain: [0.98, 0.99, 1.02],
+    black: 0.04,
+    white: 0.96,
+    sCurve: 0.24,
+    biases: [
+      { center: 0.0, width: 0.1, sat: -0.15 },
+      { center: 0.33, width: 0.1, sat: -0.12 },
+      { center: 0.55, width: 0.1, sat: -0.05 },
+    ],
+  },
+  // Brass — warm brass/gold metal, olive shadows
+  preset_leica_brass: {
+    contrast: 1.08,
+    pivot: 0.48,
+    sat: 0.88,
+    lift: [0.016, 0.012, -0.01],
+    gamma: [0.92, 0.97, 1.08],
+    gain: [1.1, 1.04, 0.86],
+    black: 0.015,
+    white: 0.985,
+    sCurve: 0.1,
+    biases: [
+      { center: 0.1, width: 0.1, sat: 0.1, shift: 0.025 },
+      { center: 0.33, width: 0.1, sat: -0.16, shift: 0.04 },
+      { center: 0.55, width: 0.1, sat: -0.12 },
+      { center: 0.0, width: 0.08, sat: 0.04 },
+    ],
+  },
+  // Eternal — soft romantic, lifted shadows, pastel, dreamy
+  preset_leica_eternal: {
+    contrast: 0.86,
+    pivot: 0.54,
+    sat: 0.8,
+    lift: [0.022, 0.016, 0.012],
+    gamma: [0.96, 1.0, 1.04],
+    gain: [1.02, 1.0, 0.98],
+    black: 0.0,
+    white: 0.995,
+    sCurve: 0.04,
+    biases: [
+      { center: 0.04, width: 0.08, sat: -0.1, shift: 0.02, lum: 0.05 },
+      { center: 0.58, width: 0.1, sat: -0.06, lum: 0.02 },
+      { center: 0.33, width: 0.1, sat: -0.08 },
+    ],
+  },
+  // Sepia — warm brown mono tone
+  preset_leica_sepia: {
+    contrast: 1.1,
+    pivot: 0.48,
+    sat: 0,
+    lift: [0, 0, 0],
+    gamma: [1, 1, 1],
+    gain: [1, 1, 1],
+    black: 0.015,
+    white: 0.985,
+    sCurve: 0.12,
+    mono: true,
+    monoWeights: [0.3, 0.55, 0.15],
+    monoGain: [1.18, 1.02, 0.72],
+    monoLift: [0.04, 0.02, -0.01],
+    biases: [],
+  },
+  // Blue — cool cyan-blue mono tone
+  preset_leica_blue: {
+    contrast: 1.12,
+    pivot: 0.47,
+    sat: 0,
+    lift: [0, 0, 0],
+    gamma: [1, 1, 1],
+    gain: [1, 1, 1],
+    black: 0.018,
+    white: 0.982,
+    sCurve: 0.14,
+    mono: true,
+    monoWeights: [0.2, 0.55, 0.25],
+    monoGain: [0.78, 0.95, 1.22],
+    monoLift: [-0.01, 0.01, 0.04],
+    biases: [],
+  },
+  // Selenium — classic selenium: cool purple shadows, soft warm highlights
+  preset_leica_selenium: {
+    contrast: 1.14,
+    pivot: 0.46,
+    sat: 0,
+    lift: [0, 0, 0],
+    gamma: [1, 1, 1],
+    gain: [1, 1, 1],
+    black: 0.02,
+    white: 0.98,
+    sCurve: 0.15,
+    mono: true,
+    monoWeights: [0.25, 0.6, 0.15],
+    monoGain: [1.05, 0.98, 1.12],
+    monoLift: [0.02, -0.005, 0.035],
+    biases: [],
+  },
+  // Sienna — warm terracotta / burnt-sienna color grade (Leica Look)
+  preset_leica_sienna: {
+    contrast: 1.06,
+    pivot: 0.49,
+    sat: 0.9,
+    lift: [0.02, 0.008, -0.012],
+    gamma: [0.93, 0.98, 1.08],
+    gain: [1.12, 1.0, 0.84],
+    black: 0.012,
+    white: 0.988,
+    sCurve: 0.09,
+    biases: [
+      { center: 0.06, width: 0.1, sat: 0.12, shift: 0.02 },
+      { center: 0.0, width: 0.08, sat: 0.08, shift: 0.015 },
+      { center: 0.33, width: 0.1, sat: -0.14, shift: 0.03 },
+      { center: 0.55, width: 0.1, sat: -0.1 },
+    ],
+  },
 };
 
 function clamp01(v: number) {
@@ -443,7 +740,16 @@ function applyRecipe(r0: number, g0: number, b0: number, recipe: FilmRecipe): [n
     let gray = clamp01(r * w[0] + g * w[1] + b * w[2]);
     gray = softContrast(gray, recipe.contrast, recipe.pivot);
     gray = sCurve(gray, recipe.sCurve ?? 0);
-    // slight cool tint in deep shadows like Acros scans
+
+    const gain = recipe.monoGain ?? [1, 1, 1];
+    const lift = recipe.monoLift ?? [0, 0, 0];
+    if (recipe.monoGain || recipe.monoLift) {
+      // Toned mono (sepia / blue / selenium)
+      const tone = (c: number, i: number) => clamp01(gray * gain[i] + lift[i] * (1 - gray));
+      return [tone(gray, 0), tone(gray, 1), tone(gray, 2)];
+    }
+
+    // Neutral Acros-like cool shadow bias
     const cool = 1 - gray;
     return [
       clamp01(gray - cool * 0.015),
