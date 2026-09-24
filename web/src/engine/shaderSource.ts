@@ -65,6 +65,7 @@ uniform vec2 uCircCenter;
 uniform float uCircRadius;
 uniform float uMaskExposure;
 uniform float uMaskSat;
+uniform float uMaskIntensity;
 
 uniform int uDxEnabled;
 uniform float uDxOpacity;
@@ -463,12 +464,13 @@ void main() {
     float d = distance(uv, uCircCenter);
     mask = max(mask, 1.0 - smoothstep(uCircRadius * 0.65, uCircRadius, d));
   }
-  if (mask > 0.001) {
+  float maskAmt = mask * clamp(uMaskIntensity / 100.0, 0.0, 1.0);
+  if (maskAmt > 0.001) {
     vec3 masked = rgb * pow(2.0, uMaskExposure / 50.0);
     vec3 mHsv = rgb2hsv(clamp(masked, 0.0, 1.0));
     mHsv.y = clamp(mHsv.y * (1.0 + uMaskSat / 100.0), 0.0, 1.0);
     masked = hsv2rgb(mHsv);
-    rgb = mix(rgb, masked, mask);
+    rgb = mix(rgb, masked, maskAmt);
   }
 
   if (uBokehStrength > 0.001) {

@@ -179,6 +179,7 @@ export function ToolPanel({ exporting = false }: ToolPanelProps) {
             <Slider label="Linear feather" value={params.linearMaskFeather} min={0.02} max={0.5} step={0.01} onChange={(v) => setParam('linearMaskFeather', v)} format={(v) => v.toFixed(2)} />
             <Toggle label="Circular mask" value={params.circularMaskEnabled} onChange={(v) => setParam('circularMaskEnabled', v)} />
             <Slider label="Circle radius" value={params.circularMaskRadius} min={0.05} max={1} step={0.01} onChange={(v) => setParam('circularMaskRadius', v)} format={(v) => v.toFixed(2)} />
+            <Slider label="Intensity" value={params.maskIntensity} min={0} max={100} onChange={(v) => setParam('maskIntensity', v)} format={pct} />
             <Slider label="Mask exposure" value={params.maskExposure} min={-100} max={100} onChange={(v) => setParam('maskExposure', v)} format={pct} />
             <Slider label="Mask saturation" value={params.maskSaturation} min={-100} max={100} onChange={(v) => setParam('maskSaturation', v)} format={pct} />
           </>

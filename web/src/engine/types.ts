@@ -90,6 +90,8 @@ export interface EditParams {
   circularMaskRadius: number;
   maskExposure: number;
   maskSaturation: number;
+  /** Mask blend opacity 0–100 (scales how strongly the mask mixes in). */
+  maskIntensity: number;
   doubleExposureEnabled: boolean;
   doubleExposureOpacity: number;
   doubleExposureOffset: Point2D;
@@ -164,6 +166,7 @@ export const DEFAULT_EDIT_PARAMS: EditParams = {
   circularMaskRadius: 0.4,
   maskExposure: 0,
   maskSaturation: 0,
+  maskIntensity: 100,
   doubleExposureEnabled: false,
   doubleExposureOpacity: 0.5,
   doubleExposureOffset: { x: 0, y: 0 },

@@ -95,7 +95,7 @@ export class GradeRenderer {
       'uGrainAmount', 'uGrainSize', 'uGrainRough',
       'uBokehStrength', 'uBokehAperture', 'uBokehCenter',
       'uLinMask', 'uLinStart', 'uLinEnd', 'uLinFeather', 'uCircMask', 'uCircCenter', 'uCircRadius',
-      'uMaskExposure', 'uMaskSat',
+      'uMaskExposure', 'uMaskSat', 'uMaskIntensity',
       'uDxEnabled', 'uDxOpacity', 'uDxOffset', 'uDxScale', 'uDxBlend',
       'uLut', 'uHasLut', 'uLutSize', 'uLutIntensity', 'uLutColorOffset', 'uLutToneOffset',
       'uLogToRec709',
@@ -349,6 +349,7 @@ export class GradeRenderer {
     gl.uniform1f(L.uCircRadius, p.circularMaskRadius);
     gl.uniform1f(L.uMaskExposure, p.maskExposure);
     gl.uniform1f(L.uMaskSat, p.maskSaturation);
+    gl.uniform1f(L.uMaskIntensity, p.maskIntensity);
     gl.uniform1i(L.uDxEnabled, p.doubleExposureEnabled ? 1 : 0);
     gl.uniform1f(L.uDxOpacity, p.doubleExposureOpacity);
     gl.uniform2f(L.uDxOffset, p.doubleExposureOffset.x, p.doubleExposureOffset.y);
