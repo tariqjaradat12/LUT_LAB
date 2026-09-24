@@ -10,7 +10,7 @@ export function TopBar({ onExport, exporting = false }: Props) {
 
   return (
     <header className="topbar">
-      <div className="brand">
+      <div className="brand" aria-label="Lut Lab">
         Lut Lab
       </div>
       <div className="top-actions">
@@ -27,7 +27,13 @@ export function TopBar({ onExport, exporting = false }: Props) {
             }}
           />
         </label>
-        <button type="button" className="btn" disabled={!hasMedia || exporting} onClick={resetParams}>
+        <button
+          type="button"
+          className="btn"
+          disabled={!hasMedia || exporting}
+          onClick={resetParams}
+          aria-label="Reset edits"
+        >
           Reset
         </button>
         <button
@@ -35,6 +41,7 @@ export function TopBar({ onExport, exporting = false }: Props) {
           className="btn btn-primary"
           disabled={!hasMedia || exporting}
           onClick={onExport}
+          aria-label={exporting ? 'Exporting' : 'Export'}
         >
           {exporting ? 'Exporting…' : 'Export'}
         </button>

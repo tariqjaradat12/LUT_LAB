@@ -42,7 +42,7 @@ button {
 
 .app {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) minmax(200px, 36dvh);
+  grid-template-rows: auto minmax(0, 1fr) minmax(220px, 44dvh);
   height: 100dvh;
   max-height: 100dvh;
   width: 100%;
@@ -316,6 +316,17 @@ button {
   overflow: hidden;
   padding-bottom: 0;
   touch-action: pan-y;
+  position: relative;
+}
+.panel::before {
+  content: "";
+  display: none;
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(232, 226, 216, 0.22);
+  margin: 0.45rem auto 0.15rem;
+  flex-shrink: 0;
 }
 @media (min-width: 900px) {
   .panel {
@@ -336,6 +347,8 @@ button {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
   flex-shrink: 0;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 0.65rem;
 }
 .section-tab {
   flex: 0 0 auto;
@@ -344,6 +357,7 @@ button {
   color: var(--muted);
   font-size: 0.88rem;
   min-height: 36px;
+  scroll-snap-align: start;
 }
 .section-tab.active {
   color: var(--bg);
@@ -782,123 +796,261 @@ button {
 
 /* Phone / narrow screens */
 @media (max-width: 899px) {
+  body {
+    font-size: 16px;
+  }
+
+  .app {
+    grid-template-rows: auto minmax(0, 1fr) minmax(240px, 46dvh);
+  }
+
+  .panel::before {
+    display: block;
+  }
+
+  .panel {
+    padding-bottom: var(--safe-bottom);
+    border-top-width: 2px;
+    border-radius: 14px 14px 0 0;
+  }
+
+  .panel--luts::before {
+    background: rgba(255, 255, 255, 0.28);
+  }
+
   .topbar {
-    padding: 0.55rem 0.7rem;
-    padding-top: max(0.55rem, var(--safe-top));
-    gap: 0.4rem;
+    padding: 0.45rem 0.65rem;
+    padding-top: max(0.45rem, var(--safe-top));
+    gap: 0.35rem;
   }
   .brand {
-    font-size: 1.15rem;
+    font-size: 1.1rem;
+  }
+  .top-actions {
+    gap: 0.35rem;
+    flex-wrap: wrap;
   }
   .btn {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.85rem;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.9rem;
     min-height: 44px;
+    min-width: 44px;
   }
   .section-tabs {
-    gap: 0.35rem;
-    padding: 0.65rem 0.75rem;
+    gap: 0.4rem;
+    padding: 0.55rem 0.7rem 0.65rem;
   }
   .section-tab {
-    padding: 0.55rem 0.95rem;
-    font-size: 0.9rem;
+    padding: 0.6rem 1.05rem;
+    font-size: 0.95rem;
     min-height: 44px;
   }
   .panel-body {
-    padding: 0.85rem 0.9rem 1rem;
-    scroll-padding-bottom: 1rem;
+    padding: 0.85rem 0.9rem calc(1.1rem + var(--safe-bottom));
+    scroll-padding-bottom: 1.5rem;
+  }
+  .panel--luts .panel-body {
+    padding-bottom: var(--safe-bottom);
+  }
+  .hint {
+    font-size: 0.9rem;
+    line-height: 1.45;
+    margin-bottom: 0.85rem;
   }
   .slider {
-    margin-bottom: 1.15rem;
+    margin-bottom: 1.2rem;
+  }
+  .slider-head {
+    font-size: 0.95rem;
+    margin-bottom: 0.4rem;
   }
   .slider input[type="range"],
   .slider-input {
-    height: 44px;
+    height: 48px;
   }
   .slider input[type="range"]::-webkit-slider-thumb,
   .slider-input::-webkit-slider-thumb {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
   }
   .slider input[type="range"]::-moz-range-thumb,
   .slider-input::-moz-range-thumb {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     border: none;
     border-radius: 50%;
     background: var(--accent);
   }
   .row {
-    margin-bottom: 1rem;
-    min-height: 44px;
+    margin-bottom: 1.05rem;
+    min-height: 48px;
   }
   .toggle {
-    width: 52px;
-    height: 32px;
+    width: 54px;
+    height: 34px;
   }
   .toggle i {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
   }
   .toggle.on i {
     transform: translateX(20px);
   }
   .chip {
-    padding: 0.5rem 0.85rem;
+    padding: 0.55rem 0.95rem;
     min-height: 44px;
-    font-size: 0.88rem;
+    font-size: 0.92rem;
   }
   .subtab {
-    padding: 0.5rem 0.8rem;
+    padding: 0.55rem 0.9rem;
     min-height: 44px;
+    font-size: 0.92rem;
   }
   .chip-row {
-    gap: 0.5rem;
-    margin: 0.65rem 0 1.1rem;
+    gap: 0.55rem;
+    margin: 0.65rem 0 1.15rem;
   }
   .subtabs {
-    gap: 0.5rem;
-    margin-bottom: 1rem;
+    gap: 0.55rem;
+    margin-bottom: 1.05rem;
   }
   .hal-pin {
-    width: 44px;
-    height: 44px;
-    margin: -22px 0 0 -22px;
+    width: 48px;
+    height: 48px;
+    margin: -24px 0 0 -24px;
   }
   .hal-pin::before {
-    width: 14px;
+    width: 16px;
   }
   .hal-pin::after {
-    height: 14px;
+    height: 16px;
+  }
+  .stage {
+    padding: 0.25rem;
+  }
+  .stage-empty {
+    padding: 1rem 1.1rem;
   }
   .stage-empty h2 {
-    font-size: 1.35rem;
+    font-size: 1.4rem;
+  }
+  .stage-empty p {
+    font-size: 0.95rem;
+  }
+  .color-badge {
+    top: 0.55rem;
+    left: 0.55rem;
+    padding: 0.4rem 0.65rem;
+    font-size: 0.75rem;
+    min-height: 36px;
+    border-radius: 6px;
+  }
+  .lut-looks-head {
+    padding: 0.85rem 1rem 0.5rem;
+  }
+  .lut-looks-kicker {
+    font-size: 1.65rem;
+  }
+  .lut-looks-import {
+    font-size: 0.8rem;
+    padding: 0.45rem 0.15rem;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .lut-looks-group-title {
+    margin: 0 1rem 0.5rem;
+    font-size: 0.72rem;
+  }
+  .lut-look {
+    padding: 0.75rem 1rem;
+    min-height: 52px;
+  }
+  .lut-look.is-active {
+    padding-left: 1.25rem;
+  }
+  .lut-look-name {
+    font-size: clamp(1.45rem, 6.5vw, 1.85rem);
+  }
+  .lut-looks-studio {
+    padding: 0.85rem 1rem calc(1rem + var(--safe-bottom));
+  }
+  .lut-looks-studio-title {
+    font-size: 1.25rem;
+  }
+  .lut-looks-text-btn {
+    font-size: 0.75rem;
+    min-height: 44px;
+    padding: 0.35rem 0.15rem;
   }
   .lut-pad {
-    height: 150px;
+    height: 160px;
   }
   .video-transport {
-    left: 0.65rem;
-    right: 0.65rem;
-    bottom: 0.65rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: 0.55rem;
     padding: 0.55rem 0.65rem;
-    gap: 0.65rem;
+    gap: 0.55rem;
+    border-radius: 10px;
   }
   .video-transport-play {
-    min-width: 44px;
+    min-width: 48px;
     min-height: 44px;
-    padding: 0.35rem 0.65rem;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.88rem;
+  }
+  .video-transport-time {
+    font-size: 0.82rem;
   }
   .video-transport-scrub {
-    height: 44px;
+    height: 48px;
+  }
+  .error-banner,
+  .export-banner {
+    padding: 0.65rem 0.85rem;
+    font-size: 0.92rem;
+  }
+}
+
+/* Short phones / landscape: put tools beside the preview */
+@media (max-width: 899px) and (orientation: landscape) and (max-height: 520px) {
+  .app {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 42vw);
+  }
+  .panel {
+    border-top: none;
+    border-left: 1px solid var(--line);
+    border-radius: 0;
+    padding-bottom: var(--safe-bottom);
+  }
+  .panel::before {
+    display: none;
+  }
+  .section-tabs {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    max-height: 38%;
+    scroll-snap-type: y proximity;
+  }
+  .section-tab {
+    width: 100%;
+    text-align: left;
+    border-radius: 8px;
   }
 }
 
 @media (max-width: 380px) {
-  .brand { font-size: 1.05rem; }
+  .brand { font-size: 1rem; }
   .btn {
-    padding: 0.45rem 0.6rem;
-    font-size: 0.8rem;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.85rem;
   }
-  .top-actions { gap: 0.35rem; }
+  .top-actions { gap: 0.3rem; }
+  .section-tab {
+    padding: 0.55rem 0.85rem;
+    font-size: 0.88rem;
+  }
 }
