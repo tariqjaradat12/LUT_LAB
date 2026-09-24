@@ -355,36 +355,46 @@ vec3 logToRec709(vec3 logRgb) {
   return clamp(rec, 0.0, 1.0);
 }
 
-vec3 applySourceDetail(vec2 uv, vec3 rgb) {
-  if (abs(uDefinition) > 0.1) {
-    vec2 px = 1.0 / uSourceResolution;
-    vec3 blur = (
-      sampleImg(uv + vec2(px.x, 0.0)) +
-      sampleImg(uv - vec2(px.x, 0.0)) +
-      sampleImg(uv + vec2(0.0, px.y)) +
-      sampleImg(uv - vec2(0.0, px.y))
-    ) * 0.25;
-    rgb = mix(rgb, rgb + (rgb - blur), uDefinition / 100.0);
-  }
+// Source-edge unsharp applied onto the graded pixel. Neighbors must come from
+// the same texture (uImage) so preview/export match without a second render pass.
+vec3 applySharpenLuma(vec2 uv, vec3 rgb, float amount) {
+  if (amount <= 0.1) return rgb;
+  vec2 px = 1.5 / uSourceResolution;
+  vec3 center = sampleImg(uv);
+  float cL = dot(center, vec3(0.2126, 0.7152, 0.0722));
+  float nL =
+    (dot(sampleImg(uv + vec2(px.x, 0.0)), vec3(0.2126, 0.7152, 0.0722)) +
+     dot(sampleImg(uv - vec2(px.x, 0.0)), vec3(0.2126, 0.7152, 0.0722)) +
+     dot(sampleImg(uv + vec2(0.0, px.y)), vec3(0.2126, 0.7152, 0.0722)) +
+     dot(sampleImg(uv - vec2(0.0, px.y)), vec3(0.2126, 0.7152, 0.0722)) +
+     dot(sampleImg(uv + px), vec3(0.2126, 0.7152, 0.0722)) +
+     dot(sampleImg(uv - px), vec3(0.2126, 0.7152, 0.0722)) +
+     dot(sampleImg(uv + vec2(px.x, -px.y)), vec3(0.2126, 0.7152, 0.0722)) +
+     dot(sampleImg(uv + vec2(-px.x, px.y)), vec3(0.2126, 0.7152, 0.0722))) * 0.125;
+  float edge = cL - nL;
+  float strength = (amount / 100.0) * 3.2;
+  float delta = edge * strength;
+  float gL = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+  float protect = smoothstep(0.02, 0.08, gL) * (1.0 - smoothstep(0.92, 0.99, gL));
+  return rgb + vec3(delta * protect);
+}
 
-  if (uSharpen > 0.1) {
-    vec2 px = 1.0 / uSourceResolution;
-    vec3 near = (
-      sampleImg(uv + vec2(px.x, 0.0)) +
-      sampleImg(uv - vec2(px.x, 0.0)) +
-      sampleImg(uv + vec2(0.0, px.y)) +
-      sampleImg(uv - vec2(0.0, px.y))
-    ) * 0.25;
-    rgb += (rgb - near) * (uSharpen / 50.0);
-  }
-
-  return clamp(rgb, 0.0, 1.0);
+vec3 applyDefinitionLuma(vec2 uv, vec3 rgb, float amount) {
+  if (abs(amount) <= 0.1) return rgb;
+  vec2 px = 2.0 / uSourceResolution;
+  float cL = dot(sampleImg(uv), vec3(0.2126, 0.7152, 0.0722));
+  float blurL =
+    (dot(sampleImg(uv + vec2(px.x, 0.0)), vec3(0.2126, 0.7152, 0.0722)) +
+     dot(sampleImg(uv - vec2(px.x, 0.0)), vec3(0.2126, 0.7152, 0.0722)) +
+     dot(sampleImg(uv + vec2(0.0, px.y)), vec3(0.2126, 0.7152, 0.0722)) +
+     dot(sampleImg(uv - vec2(0.0, px.y)), vec3(0.2126, 0.7152, 0.0722))) * 0.25;
+  float detail = (cL - blurL) * (amount / 100.0) * 1.6;
+  return rgb + vec3(detail);
 }
 
 void main() {
   vec2 uv = vUv;
   vec3 rgb = sampleImg(uv);
-  rgb = applySourceDetail(uv, rgb);
 
   if (uLogToRec709 == 1) {
     rgb = logToRec709(rgb);
@@ -429,6 +439,10 @@ void main() {
     c = vec3(sampleCurve(1.0, c.r), sampleCurve(2.0, c.g), sampleCurve(3.0, c.b));
     rgb = clamp(c, 0.0, 1.0);
   }
+
+  // Detail after grade/LUT so edges survive the LUT remapping
+  rgb = applyDefinitionLuma(uv, rgb, uDefinition);
+  rgb = applySharpenLuma(uv, rgb, uSharpen);
 
   if (uSoftness > 0.01) {
     rgb = applySoftness(uv, rgb);
@@ -476,14 +490,23 @@ void main() {
 
   if (uGrainAmount > 0.1) {
     float scale = max(uGrainSize, 0.5) * 0.55;
-    vec2 gp = uv * uSourceResolution * 0.35 / scale;
+    // Density scales with resolution so grain size feels consistent on preview + export
+    vec2 gp = uv * uSourceResolution * 0.45 / scale;
     float n = softNoise(gp);
-    n = mix(n, softNoise(gp * 2.1 + 7.3), 0.35);
-    n = mix(n, hash(floor(gp * 0.5)), uGrainRough * 0.25);
+    n = mix(n, softNoise(gp * 2.3 + 7.3), 0.4);
+    n = mix(n, hash(floor(gp)), uGrainRough * 0.45);
     float gLuma = dot(rgb, vec3(0.299, 0.587, 0.114));
-    float response = mix(0.55, 1.0, gLuma) * mix(1.0, 0.65, abs(gLuma - 0.5) * 2.0);
-    float grain = (n - 0.5) * (uGrainAmount / 100.0) * 0.18 * response;
-    rgb += vec3(grain) + vec3(grain * 0.04, -grain * 0.02, grain * 0.03) * uGrainRough;
+    // Keep grain visible in shadows/highlights (esp. after B&W LUTs crush tones)
+    float response = mix(0.75, 1.15, gLuma) * mix(1.0, 0.8, abs(gLuma - 0.5) * 2.0);
+    float amt = (uGrainAmount / 100.0) * 0.42 * response;
+    float grain = (n - 0.5) * amt;
+    // Detect near-monochrome (B&W LUT or BW toggle) → pure luma grain so it stays visible
+    float chroma = max(abs(rgb.r - rgb.g), max(abs(rgb.g - rgb.b), abs(rgb.r - rgb.b)));
+    float monoMix = clamp(1.0 - chroma * 8.0, 0.0, 1.0);
+    if (uBw == 1) monoMix = 1.0;
+    vec3 monoGrain = vec3(grain);
+    vec3 colorGrain = vec3(grain) + vec3(grain * 0.06, -grain * 0.03, grain * 0.04) * uGrainRough;
+    rgb += mix(colorGrain, monoGrain, monoMix);
   }
 
   if (uDxEnabled == 1 && uHasBlend == 1) {
