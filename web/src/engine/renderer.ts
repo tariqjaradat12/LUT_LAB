@@ -189,6 +189,22 @@ export class GradeRenderer {
 
   private upload(target: WebGLTexture, bitmap: ImageBitmap) {
     const gl = this.gl;
+    const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
+    let source: TexImageSource = bitmap;
+    let scratch: HTMLCanvasElement | null = null;
+    if (bitmap.width > maxTex || bitmap.height > maxTex) {
+      const scale = maxTex / Math.max(bitmap.width, bitmap.height);
+      const w = Math.max(1, Math.floor(bitmap.width * scale));
+      const h = Math.max(1, Math.floor(bitmap.height * scale));
+      scratch = document.createElement('canvas');
+      scratch.width = w;
+      scratch.height = h;
+      const ctx = scratch.getContext('2d');
+      if (!ctx) throw new Error('Photo is too large for this device GPU.');
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      source = scratch;
+      this.imageSize = { w, h };
+    }
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, target);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
@@ -198,13 +214,13 @@ export class GradeRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
   }
 
   setImage(bitmap: ImageBitmap) {
     if (!this.tex) this.tex = this.gl.createTexture();
-    this.upload(this.tex!, bitmap);
     this.imageSize = { w: bitmap.width, h: bitmap.height };
+    this.upload(this.tex!, bitmap);
     const stage = this.stageElement();
     if (stage) this.fitToStage(stage.clientWidth, stage.clientHeight);
     this.render();

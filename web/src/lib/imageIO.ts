@@ -1,17 +1,85 @@
+/** Longest edge for the working bitmap (preview + grade texture). Matches export cap. */
+export const MAX_IMAGE_EDGE = 4096;
+
+function fitWithinEdge(width: number, height: number, maxEdge: number) {
+  const edge = Math.max(width, height);
+  if (edge <= maxEdge || edge < 1) return { width, height };
+  const scale = maxEdge / edge;
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+/** Prefer a smaller working size on low-memory / phone browsers. */
+function workingMaxEdge() {
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  if (typeof nav.deviceMemory === 'number' && nav.deviceMemory > 0 && nav.deviceMemory <= 4) {
+    return 2048;
+  }
+  if (typeof window !== 'undefined' && window.innerWidth > 0 && window.innerWidth < 900) {
+    return 3072;
+  }
+  return MAX_IMAGE_EDGE;
+}
+
+async function decodeOriented(file: File): Promise<ImageBitmap> {
+  try {
+    return await createImageBitmap(file, {
+      imageOrientation: 'from-image',
+      premultiplyAlpha: 'none',
+    });
+  } catch {
+    return createImageBitmap(file);
+  }
+}
+
+async function downscaleBitmap(source: ImageBitmap, width: number, height: number): Promise<ImageBitmap> {
+  if (source.width === width && source.height === height) return source;
+  try {
+    const scaled = await createImageBitmap(source, {
+      resizeWidth: width,
+      resizeHeight: height,
+      resizeQuality: 'high',
+      premultiplyAlpha: 'none',
+    });
+    source.close();
+    return scaled;
+  } catch {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      source.close();
+      throw new Error('Could not resize that photo.');
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(source, 0, 0, width, height);
+    source.close();
+    try {
+      return await createImageBitmap(canvas, { premultiplyAlpha: 'none' });
+    } catch {
+      return createImageBitmap(canvas);
+    }
+  }
+}
+
+/**
+ * Decode a photo for editing. Large images are downscaled so WebGL stays responsive
+ * (phones often choke on 40–100MP camera files).
+ */
 export async function loadImageFromFile(file: File): Promise<ImageBitmap> {
   if (!file.type.startsWith('image/')) {
     throw new Error('Please choose a JPEG, PNG, or WebP photo.');
   }
 
-  // Honor EXIF orientation; keep straight alpha so we don't darken the photo.
-  let decoded: ImageBitmap;
-  try {
-    decoded = await createImageBitmap(file, {
-      imageOrientation: 'from-image',
-      premultiplyAlpha: 'none',
-    });
-  } catch {
-    decoded = await createImageBitmap(file);
+  let decoded = await decodeOriented(file);
+  const maxEdge = workingMaxEdge();
+  const fitted = fitWithinEdge(decoded.width, decoded.height, maxEdge);
+  if (fitted.width !== decoded.width || fitted.height !== decoded.height) {
+    decoded = await downscaleBitmap(decoded, fitted.width, fitted.height);
   }
 
   const canvas = document.createElement('canvas');
@@ -23,31 +91,12 @@ export async function loadImageFromFile(file: File): Promise<ImageBitmap> {
     throw new Error('Could not decode that photo.');
   }
 
-  // Draw onto a clear buffer — do NOT fill black first (that darkens any non-opaque pixels).
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Composite over black (opaque) without a full getImageData scan — that loop
+  // freezes the tab on multi‑megapixel photos.
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(decoded, 0, 0);
   decoded.close();
-
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const d = imageData.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const a = d[i + 3];
-    if (a === 255) continue;
-    if (a === 0) {
-      d[i] = 0;
-      d[i + 1] = 0;
-      d[i + 2] = 0;
-      d[i + 3] = 255;
-      continue;
-    }
-    // Straight alpha → opaque over black, preserving look of translucent edges only.
-    const aa = a / 255;
-    d[i] = Math.round(d[i] * aa);
-    d[i + 1] = Math.round(d[i + 1] * aa);
-    d[i + 2] = Math.round(d[i + 2] * aa);
-    d[i + 3] = 255;
-  }
-  ctx.putImageData(imageData, 0, 0);
 
   try {
     return await createImageBitmap(canvas, { premultiplyAlpha: 'none' });
