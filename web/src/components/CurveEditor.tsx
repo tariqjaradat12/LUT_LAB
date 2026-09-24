@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { defaultCurve, type CurveChannelId, type CurvePoint } from '../engine/types';
+import { evalToneCurve, moveCurvePoint } from '../lib/curveMath';
 
 const CHANNELS: { id: CurveChannelId; label: string; color: string }[] = [
   { id: 'rgb', label: 'White', color: '#e8e2d8' },
@@ -24,7 +25,7 @@ export function CurveEditor({ curves, onChange }: Props) {
   const [channel, setChannel] = useState<CurveChannelId>('rgb');
   const [layoutTick, setLayoutTick] = useState(0);
   const dragIndex = useRef<number | null>(null);
-  const points = curves[channel].length >= 5 ? curves[channel] : defaultCurve();
+  const points = curves[channel].length >= 2 ? curves[channel] : defaultCurve();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -73,18 +74,22 @@ export function CurveEditor({ curves, onChange }: Props) {
     ctx.stroke();
 
     const meta = CHANNELS.find((c) => c.id === channel)!;
-    const handleR = Math.max(6, Math.min(W, H) * 0.035);
+    const handleR = Math.max(7, Math.min(W, H) * 0.04);
 
+    // Draw evaluated curve so the line matches the LUT
     ctx.strokeStyle = meta.color;
     ctx.lineWidth = Math.max(2, Math.min(W, H) * 0.008);
     ctx.lineJoin = 'round';
     ctx.beginPath();
-    points.forEach((p, i) => {
-      const x = p.x * W;
-      const y = (1 - p.y) * H;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
+    const samples = Math.max(64, Math.round(W));
+    for (let i = 0; i <= samples; i++) {
+      const x = i / samples;
+      const y = evalToneCurve(x, points);
+      const px = x * W;
+      const py = (1 - y) * H;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
     ctx.stroke();
 
     points.forEach((p) => {
@@ -123,11 +128,7 @@ export function CurveEditor({ curves, onChange }: Props) {
     dragIndex.current = bestD < hitRadius() ? best : null;
     e.currentTarget.setPointerCapture(e.pointerId);
     if (dragIndex.current != null) {
-      const i = dragIndex.current;
-      onChange(
-        channel,
-        points.map((p, idx) => (idx === i ? { x: p.x, y: n.y } : p)),
-      );
+      onChange(channel, moveCurvePoint(points, dragIndex.current, n.x, n.y));
     }
   };
 
@@ -135,11 +136,7 @@ export function CurveEditor({ curves, onChange }: Props) {
     if (dragIndex.current == null) return;
     e.preventDefault();
     const n = toNorm(e);
-    const i = dragIndex.current;
-    onChange(
-      channel,
-      points.map((p, idx) => (idx === i ? { x: p.x, y: n.y } : p)),
-    );
+    onChange(channel, moveCurvePoint(points, dragIndex.current, n.x, n.y));
   };
 
   return (
@@ -168,6 +165,9 @@ export function CurveEditor({ curves, onChange }: Props) {
           dragIndex.current = null;
         }}
       />
+      <p className="hint" style={{ marginTop: '0.55rem', marginBottom: 0 }}>
+        Drag points freely. Endpoints stay on the left/right edges.
+      </p>
       <button
         type="button"
         className="btn"

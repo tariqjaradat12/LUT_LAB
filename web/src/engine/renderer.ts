@@ -1,4 +1,4 @@
-import { BLEND_MODE_INDEX, HUE_BANDS, type CurveChannels, type CurvePoint, type EditParams } from './types';
+import { BLEND_MODE_INDEX, HUE_BANDS, defaultCurve, type CurveChannels, type CurvePoint, type EditParams } from './types';
 import { FRAG, VERT } from './shaderSource';
 import { bakeCurveAtlas } from '../lib/curveMath';
 import { lutDataToTextureBytes } from './lutEngine';
@@ -15,11 +15,14 @@ function compile(gl: WebGLRenderingContext, type: number, src: string) {
   return s;
 }
 
-const IDENTITY_Y = [0, 0.25, 0.5, 0.75, 1];
 const CURVE_LUT_SIZE = 256;
 
 function channelIsIdentity(points: CurvePoint[]) {
-  return points.length >= 5 && points.every((p, i) => Math.abs(p.y - IDENTITY_Y[i]) < 0.002);
+  if (!points || points.length < 2) return true;
+  const first = points[0]!;
+  const last = points[points.length - 1]!;
+  if (Math.abs(first.x) > 0.002 || Math.abs(last.x - 1) > 0.002) return false;
+  return points.every((p) => Math.abs(p.y - p.x) < 0.002);
 }
 
 function curvesAreIdentity(curves: CurveChannels) {
@@ -113,10 +116,10 @@ export class GradeRenderer {
 
   private uploadIdentityCurves() {
     const identity = {
-      rgb: IDENTITY_Y.map((y, i) => ({ x: i / 4, y })),
-      r: IDENTITY_Y.map((y, i) => ({ x: i / 4, y })),
-      g: IDENTITY_Y.map((y, i) => ({ x: i / 4, y })),
-      b: IDENTITY_Y.map((y, i) => ({ x: i / 4, y })),
+      rgb: defaultCurve(),
+      r: defaultCurve(),
+      g: defaultCurve(),
+      b: defaultCurve(),
     };
     this.uploadCurveAtlas(identity);
   }
@@ -147,10 +150,10 @@ export class GradeRenderer {
 
   private syncCurveAtlas(curves: CurveChannels) {
     const key = [
-      ...curves.rgb.map((p) => p.y.toFixed(4)),
-      ...curves.r.map((p) => p.y.toFixed(4)),
-      ...curves.g.map((p) => p.y.toFixed(4)),
-      ...curves.b.map((p) => p.y.toFixed(4)),
+      ...curves.rgb.map((p) => `${p.x.toFixed(4)}:${p.y.toFixed(4)}`),
+      ...curves.r.map((p) => `${p.x.toFixed(4)}:${p.y.toFixed(4)}`),
+      ...curves.g.map((p) => `${p.x.toFixed(4)}:${p.y.toFixed(4)}`),
+      ...curves.b.map((p) => `${p.x.toFixed(4)}:${p.y.toFixed(4)}`),
     ].join(',');
     if (key === this.lastCurveKey) return;
     this.lastCurveKey = key;
