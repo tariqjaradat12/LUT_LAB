@@ -72,6 +72,7 @@ uniform float uDxOpacity;
 uniform vec2 uDxOffset;
 uniform float uDxScale;
 uniform int uDxBlend;
+uniform vec2 uBlendResolution;
 
 uniform sampler2D uLut;
 uniform int uHasLut;
@@ -512,12 +513,18 @@ void main() {
   }
 
   if (uDxEnabled == 1 && uHasBlend == 1) {
+    // Cover the base frame with the blend photo, keeping its aspect ratio.
+    vec2 baseSize = max(uSourceResolution, vec2(1.0));
+    vec2 blendSize = max(uBlendResolution, vec2(1.0));
+    float cover = max(baseSize.x / blendSize.x, baseSize.y / blendSize.y);
     float scale = max(uDxScale, 0.15);
-    vec2 bUv = (uv - 0.5 - uDxOffset) / scale + 0.5;
-    bUv = clamp(bUv, 0.0, 1.0);
-    vec4 blend = texture2D(uBlend, bUv);
-    vec3 mixed = blendDx(rgb, blend.rgb, uDxBlend);
-    rgb = mix(rgb, clamp(mixed, 0.0, 1.0), uDxOpacity * blend.a);
+    vec2 basePx = (uv - 0.5 - uDxOffset) * baseSize;
+    vec2 bUv = (basePx / (cover * scale)) / blendSize + 0.5;
+    if (bUv.x >= 0.0 && bUv.x <= 1.0 && bUv.y >= 0.0 && bUv.y <= 1.0) {
+      vec4 blend = texture2D(uBlend, bUv);
+      vec3 mixed = blendDx(rgb, blend.rgb, uDxBlend);
+      rgb = mix(rgb, clamp(mixed, 0.0, 1.0), uDxOpacity * blend.a);
+    }
   }
 
   gl_FragColor = vec4(clamp(rgb, 0.0, 1.0), 1.0);

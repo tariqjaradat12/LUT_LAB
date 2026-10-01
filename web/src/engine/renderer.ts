@@ -60,6 +60,7 @@ export class GradeRenderer {
   private lutSize = 33;
   private params: EditParams | null = null;
   private imageSize = { w: 1, h: 1 };
+  private blendSize = { w: 1, h: 1 };
   private locs: Record<string, WebGLUniformLocation | null> = {};
   private lastCurveKey = '';
 
@@ -99,7 +100,7 @@ export class GradeRenderer {
       'uBokehStrength', 'uBokehAperture', 'uBokehCenter',
       'uLinMask', 'uLinStart', 'uLinEnd', 'uLinFeather', 'uCircMask', 'uCircCenter', 'uCircRadius',
       'uMaskExposure', 'uMaskSat', 'uMaskIntensity',
-      'uDxEnabled', 'uDxOpacity', 'uDxOffset', 'uDxScale', 'uDxBlend',
+      'uDxEnabled', 'uDxOpacity', 'uDxOffset', 'uDxScale', 'uDxBlend', 'uBlendResolution',
       'uLut', 'uHasLut', 'uLutSize', 'uLutIntensity', 'uLutColorOffset', 'uLutToneOffset',
       'uLogToRec709',
     ];
@@ -190,23 +191,24 @@ export class GradeRenderer {
     return this.canvas.closest('.stage') as HTMLElement | null;
   }
 
-  private upload(target: WebGLTexture, bitmap: ImageBitmap) {
+  /** Returns the pixel size actually uploaded (aspect preserved if GPU-clamped). */
+  private upload(target: WebGLTexture, bitmap: ImageBitmap): { w: number; h: number } {
     const gl = this.gl;
     const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
     let source: TexImageSource = bitmap;
-    let scratch: HTMLCanvasElement | null = null;
+    let size = { w: bitmap.width, h: bitmap.height };
     if (bitmap.width > maxTex || bitmap.height > maxTex) {
       const scale = maxTex / Math.max(bitmap.width, bitmap.height);
       const w = Math.max(1, Math.floor(bitmap.width * scale));
       const h = Math.max(1, Math.floor(bitmap.height * scale));
-      scratch = document.createElement('canvas');
+      const scratch = document.createElement('canvas');
       scratch.width = w;
       scratch.height = h;
       const ctx = scratch.getContext('2d');
       if (!ctx) throw new Error('Photo is too large for this device GPU.');
       ctx.drawImage(bitmap, 0, 0, w, h);
       source = scratch;
-      this.imageSize = { w, h };
+      size = { w, h };
     }
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, target);
@@ -218,12 +220,12 @@ export class GradeRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    return size;
   }
 
   setImage(bitmap: ImageBitmap) {
     if (!this.tex) this.tex = this.gl.createTexture();
-    this.imageSize = { w: bitmap.width, h: bitmap.height };
-    this.upload(this.tex!, bitmap);
+    this.imageSize = this.upload(this.tex!, bitmap);
     const stage = this.stageElement();
     if (stage) this.fitToStage(stage.clientWidth, stage.clientHeight);
     this.render();
@@ -252,11 +254,12 @@ export class GradeRenderer {
   setBlendImage(bitmap: ImageBitmap | null) {
     if (!bitmap) {
       this.hasBlend = false;
+      this.blendSize = { w: 1, h: 1 };
       this.render();
       return;
     }
     if (!this.blendTex) this.blendTex = this.gl.createTexture();
-    this.upload(this.blendTex!, bitmap);
+    this.blendSize = this.upload(this.blendTex!, bitmap);
     this.hasBlend = true;
     this.render();
   }
@@ -358,6 +361,7 @@ export class GradeRenderer {
     gl.uniform2f(L.uDxOffset, p.doubleExposureOffset.x, p.doubleExposureOffset.y);
     gl.uniform1f(L.uDxScale, p.doubleExposureScale);
     gl.uniform1i(L.uDxBlend, BLEND_MODE_INDEX[p.doubleExposureBlend]);
+    gl.uniform2f(L.uBlendResolution, this.blendSize.w, this.blendSize.h);
     gl.uniform1i(L.uHasLut, this.hasLut ? 1 : 0);
     gl.uniform1f(L.uLutSize, this.lutSize);
     gl.uniform1f(L.uLutIntensity, p.lutIntensity);
