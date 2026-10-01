@@ -14,7 +14,7 @@ export function TopBar({ onExport, exporting = false }: Props) {
     <header className="topbar">
       <div className="brand" aria-label="Lut Lab">
         Lut Lab
-        <a className="kofi-link" href={KO_FI_URL} target="_blank" rel="noreferrer">
+        <a className="kofi-link" href={KO_FI_URL} target="_blank" rel="noopener noreferrer">
           Ko-fi
         </a>
       </div>

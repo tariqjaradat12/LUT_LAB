@@ -70,6 +70,22 @@ function findLutData(
   );
 }
 
+const IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
+const VIDEO_EXT = /\.(mp4|webm|mov|m4v)$/i;
+const MAX_LUT_BYTES = 8 * 1024 * 1024;
+
+function isSvg(file: File) {
+  return file.type === 'image/svg+xml' || /\.svg$/i.test(file.name);
+}
+
+function isImageFile(file: File) {
+  return !isSvg(file) && (file.type.startsWith('image/') || IMAGE_EXT.test(file.name));
+}
+
+function isVideoFile(file: File) {
+  return file.type.startsWith('video/') || VIDEO_EXT.test(file.name);
+}
+
 export function EditProvider({ children }: { children: ReactNode }) {
   const [params, setParams] = useState<EditParams>(() => cloneDefaultParams());
   const [imageBitmap, setImageBitmap] = useState<ImageBitmap | null>(null);
@@ -182,8 +198,11 @@ export function EditProvider({ children }: { children: ReactNode }) {
       clearBlend();
       clearLut();
 
-      const isVideo =
-        file.type.startsWith('video/') || /\.(mp4|webm|mov|m4v)$/i.test(file.name);
+      const isVideo = isVideoFile(file);
+      if (!isVideo && !isImageFile(file)) {
+        setError('That file type is not supported.');
+        return;
+      }
 
       if (isVideo) {
         const loaded = await loadVideoFromFile(file);
@@ -214,6 +233,10 @@ export function EditProvider({ children }: { children: ReactNode }) {
 
   const openBlendImage = useCallback(async (file: File) => {
     try {
+      if (!isImageFile(file)) {
+        setError('Choose a JPEG, PNG, or WebP photo.');
+        return;
+      }
       const bmp = await loadImageFromFile(file);
       setBlendBitmap((prev) => {
         prev?.close();
@@ -228,6 +251,10 @@ export function EditProvider({ children }: { children: ReactNode }) {
 
   const importLutFile = useCallback(async (file: File) => {
     try {
+      if (!/\.cube$/i.test(file.name) || file.size > MAX_LUT_BYTES) {
+        setError('Choose a .cube LUT under 8 MB.');
+        return;
+      }
       const content = await file.text();
       const { lut, importedLuts: next } = importCubeContent(
         content,

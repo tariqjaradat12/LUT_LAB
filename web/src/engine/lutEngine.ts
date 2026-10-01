@@ -96,6 +96,9 @@ export function parseCube(content: string): LutData {
 
     if (trimmed.startsWith('LUT_3D_SIZE')) {
       size = parseInt(trimmed.split(/\s+/)[1], 10);
+      if (!Number.isFinite(size) || size < 2 || size > 65) {
+        throw new Error('LUT size is not supported.');
+      }
       continue;
     }
     if (
