@@ -1,6 +1,6 @@
 import { useEditStore } from '../state/editStore';
 
-const KO_FI_URL = 'https://ko-fi.com/';
+const KO_FI_URL = 'https://ko-fi.com/tariq12';
 
 type Props = {
   onExport: () => void;
