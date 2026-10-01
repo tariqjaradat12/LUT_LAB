@@ -1,5 +1,7 @@
 import { useEditStore } from '../state/editStore';
 
+const KO_FI_URL = 'https://ko-fi.com/';
+
 type Props = {
   onExport: () => void;
   exporting?: boolean;
@@ -12,6 +14,9 @@ export function TopBar({ onExport, exporting = false }: Props) {
     <header className="topbar">
       <div className="brand" aria-label="Lut Lab">
         Lut Lab
+        <a className="kofi-link" href={KO_FI_URL} target="_blank" rel="noreferrer">
+          Ko-fi
+        </a>
       </div>
       <div className="top-actions">
         <label className="btn file-btn">
