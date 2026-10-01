@@ -100,7 +100,7 @@ export class GradeRenderer {
       'uBokehStrength', 'uBokehAperture', 'uBokehCenter',
       'uLinMask', 'uLinStart', 'uLinEnd', 'uLinFeather', 'uCircMask', 'uCircCenter', 'uCircRadius',
       'uMaskExposure', 'uMaskSat', 'uMaskIntensity',
-      'uDxEnabled', 'uDxOpacity', 'uDxOffset', 'uDxScale', 'uDxBlend', 'uBlendResolution',
+      'uDxEnabled', 'uDxOpacity', 'uDxOffset', 'uDxScale', 'uDxBlend', 'uDxWhites', 'uBlendResolution',
       'uLut', 'uHasLut', 'uLutSize', 'uLutIntensity', 'uLutColorOffset', 'uLutToneOffset',
       'uLogToRec709',
     ];
@@ -361,6 +361,7 @@ export class GradeRenderer {
     gl.uniform2f(L.uDxOffset, p.doubleExposureOffset.x, p.doubleExposureOffset.y);
     gl.uniform1f(L.uDxScale, p.doubleExposureScale);
     gl.uniform1i(L.uDxBlend, BLEND_MODE_INDEX[p.doubleExposureBlend]);
+    gl.uniform1i(L.uDxWhites, p.doubleExposureWhites === 'blend' ? 1 : 0);
     gl.uniform2f(L.uBlendResolution, this.blendSize.w, this.blendSize.h);
     gl.uniform1i(L.uHasLut, this.hasLut ? 1 : 0);
     gl.uniform1f(L.uLutSize, this.lutSize);

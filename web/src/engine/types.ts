@@ -1,6 +1,7 @@
 export type Point2D = { x: number; y: number };
 
 export type DoubleExposureBlend =
+  | 'inWhites'
   | 'additive'
   | 'average'
   | 'bright'
@@ -10,7 +11,11 @@ export type DoubleExposureBlend =
   | 'screen'
   | 'lighten';
 
+/** Which photo's bright areas show the other photo. */
+export type DoubleExposureWhites = 'base' | 'blend';
+
 export const BLEND_MODES: { id: DoubleExposureBlend; label: string }[] = [
+  { id: 'inWhites', label: 'In whites' },
   { id: 'additive', label: 'Additive' },
   { id: 'average', label: 'Average' },
   { id: 'bright', label: 'Bright' },
@@ -22,6 +27,7 @@ export const BLEND_MODES: { id: DoubleExposureBlend; label: string }[] = [
 ];
 
 export const BLEND_MODE_INDEX: Record<DoubleExposureBlend, number> = {
+  inWhites: 8,
   additive: 0,
   average: 1,
   bright: 2,
@@ -97,6 +103,8 @@ export interface EditParams {
   doubleExposureOffset: Point2D;
   doubleExposureScale: number;
   doubleExposureBlend: DoubleExposureBlend;
+  /** Bright areas of this photo show the blend (`base`) or the reverse (`blend`). */
+  doubleExposureWhites: DoubleExposureWhites;
   lutIntensity: number;
   lutColorOffset: number;
   lutToneOffset: number;
@@ -168,10 +176,11 @@ export const DEFAULT_EDIT_PARAMS: EditParams = {
   maskSaturation: 0,
   maskIntensity: 100,
   doubleExposureEnabled: false,
-  doubleExposureOpacity: 0.5,
+  doubleExposureOpacity: 1,
   doubleExposureOffset: { x: 0, y: 0 },
   doubleExposureScale: 1,
-  doubleExposureBlend: 'additive',
+  doubleExposureBlend: 'inWhites',
+  doubleExposureWhites: 'base',
   lutIntensity: 100,
   lutColorOffset: 0,
   lutToneOffset: 0,

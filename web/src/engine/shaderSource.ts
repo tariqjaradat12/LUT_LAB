@@ -72,6 +72,7 @@ uniform float uDxOpacity;
 uniform vec2 uDxOffset;
 uniform float uDxScale;
 uniform int uDxBlend;
+uniform int uDxWhites;
 uniform vec2 uBlendResolution;
 
 uniform sampler2D uLut;
@@ -292,6 +293,14 @@ vec3 blendDx(vec3 base, vec3 over, int mode) {
     );
   }
   if (mode == 6) return 1.0 - (1.0 - base) * (1.0 - over);
+  if (mode == 8) {
+    // Bright areas of the holder show the other photo (Fuji-style double exposure).
+    vec3 holder = uDxWhites == 1 ? over : base;
+    vec3 fill = uDxWhites == 1 ? base : over;
+    float luma = dot(clamp(holder, 0.0, 1.0), vec3(0.2126, 0.7152, 0.0722));
+    float w = smoothstep(0.05, 0.82, luma);
+    return mix(holder, fill, w);
+  }
   return max(base, over);
 }
 

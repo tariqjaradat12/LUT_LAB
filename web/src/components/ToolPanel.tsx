@@ -188,7 +188,7 @@ export function ToolPanel({ exporting = false }: ToolPanelProps) {
         {section === 'double' && (
           <>
             <Toggle label="Enable" value={params.doubleExposureEnabled} onChange={(v) => setParam('doubleExposureEnabled', v)} />
-            <p className="hint">Drag on the image to move the blend photo. Pinch to resize it.</p>
+            <p className="hint">In whites, bright areas of one photo show the other. A white mug shows the flower inside it. Drag to move, pinch to resize.</p>
             <label className="btn file-btn" style={{ marginBottom: '0.75rem' }}>
               {blendBitmap ? 'Change blend photo' : 'Select blend photo'}
               <input
@@ -205,6 +205,24 @@ export function ToolPanel({ exporting = false }: ToolPanelProps) {
               <button type="button" className="btn" style={{ marginBottom: '0.75rem' }} onClick={clearBlend}>
                 Clear blend photo
               </button>
+            )}
+            {params.doubleExposureBlend === 'inWhites' && (
+              <div className="chip-row">
+                <button
+                  type="button"
+                  className={`chip${params.doubleExposureWhites === 'base' ? ' active' : ''}`}
+                  onClick={() => setParam('doubleExposureWhites', 'base')}
+                >
+                  In this photo
+                </button>
+                <button
+                  type="button"
+                  className={`chip${params.doubleExposureWhites === 'blend' ? ' active' : ''}`}
+                  onClick={() => setParam('doubleExposureWhites', 'blend')}
+                >
+                  In blend photo
+                </button>
+              </div>
             )}
             <div className="chip-row">
               {BLEND_MODES.map((m) => (
